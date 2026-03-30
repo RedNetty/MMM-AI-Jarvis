@@ -1,0 +1,110 @@
+/* MMM-AI-Jarvis styles */
+
+.MMM-AI-Jarvis {
+  font-family: var(--font-family, "Roboto Condensed", sans-serif);
+  color: #fff;
+  text-align: center;
+  min-width: 280px;
+  padding: 8px 0;
+}
+
+/* ── Status row ─────────────────────────────────────────────── */
+
+.MMM-AI-Jarvis .status-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.MMM-AI-Jarvis .orb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #555;
+  transition: background 0.4s ease, box-shadow 0.4s ease;
+}
+
+.MMM-AI-Jarvis .status-label {
+  font-size: 14px;
+  color: #aaa;
+  letter-spacing: 0.04em;
+  transition: color 0.3s;
+}
+
+/* ── State colours ──────────────────────────────────────────── */
+
+.MMM-AI-Jarvis.state-idle .orb {
+  background: #444;
+}
+
+.MMM-AI-Jarvis.state-listening .orb {
+  background: #4caf50;
+  box-shadow: 0 0 8px #4caf50, 0 0 18px #4caf5055;
+  animation: pulse-green 1.2s infinite;
+}
+
+.MMM-AI-Jarvis.state-processing .orb {
+  background: #2196f3;
+  box-shadow: 0 0 8px #2196f3, 0 0 18px #2196f355;
+  animation: pulse-blue 0.8s infinite;
+}
+
+.MMM-AI-Jarvis.state-speaking .orb {
+  background: #9c27b0;
+  box-shadow: 0 0 8px #9c27b0, 0 0 18px #9c27b055;
+  animation: pulse-purple 1s infinite;
+}
+
+.MMM-AI-Jarvis.state-error .orb {
+  background: #f44336;
+  box-shadow: 0 0 8px #f44336;
+}
+
+.MMM-AI-Jarvis.state-listening .status-label { color: #4caf50; }
+.MMM-AI-Jarvis.state-processing .status-label { color: #2196f3; }
+.MMM-AI-Jarvis.state-speaking .status-label  { color: #9c27b0; }
+.MMM-AI-Jarvis.state-error .status-label     { color: #f44336; }
+
+/* ── Transcription & response ───────────────────────────────── */
+
+.MMM-AI-Jarvis .transcription,
+.MMM-AI-Jarvis .response {
+  margin: 4px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 420px;
+  word-break: break-word;
+}
+
+.MMM-AI-Jarvis .who {
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.MMM-AI-Jarvis .who.you    { color: #ccc; }
+.MMM-AI-Jarvis .who.jarvis { color: #9c27b0; }
+
+.MMM-AI-Jarvis .error-msg {
+  font-size: 12px;
+  color: #f44336;
+  margin-top: 4px;
+}
+
+/* ── Animations ─────────────────────────────────────────────── */
+
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 6px #4caf50, 0 0 12px #4caf5044; }
+  50%       { box-shadow: 0 0 12px #4caf50, 0 0 28px #4caf5088; }
+}
+
+@keyframes pulse-blue {
+  0%, 100% { box-shadow: 0 0 6px #2196f3, 0 0 12px #2196f344; }
+  50%       { box-shadow: 0 0 14px #2196f3, 0 0 30px #2196f388; }
+}
+
+@keyframes pulse-purple {
+  0%, 100% { box-shadow: 0 0 6px #9c27b0, 0 0 12px #9c27b044; }
+  50%       { box-shadow: 0 0 12px #9c27b0, 0 0 24px #9c27b088; }
+}
