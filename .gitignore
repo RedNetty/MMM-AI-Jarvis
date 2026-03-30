@@ -6,3 +6,11 @@ config/config.js
 *.log
 .idea/
 .DS_Store
+
+# Build artifacts and OS files
+target/
+*.class
+*.jar
+!*-sources.jar
+Thumbs.db
+
