@@ -1,17 +1,29 @@
 {
   "name": "MMM-AI-Jarvis",
-  "version": "2.0.0",
-  "description": "MagicMirror² voice assistant module powered by Google Cloud Vertex AI",
+  "version": "3.0.0",
+  "description": "Private, on-device voice assistant and personal stylist for MagicMirror² — local speech, local LLM with vision, wardrobe memory and weather-aware outfit suggestions.",
   "main": "node_helper.js",
   "license": "MIT",
-  "engines": {
-    "node": ">=18"
+  "author": "RedNetty",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RedNetty/MMM-AI-Jarvis.git"
   },
-  "dependencies": {
-    "@google-cloud/speech": "^6.5.0",
-    "@google-cloud/text-to-speech": "^5.3.0",
-    "@google-cloud/vertexai": "^1.2.0",
-    "axios": "^1.7.2",
-    "cheerio": "^1.0.0"
+  "keywords": [
+    "magicmirror",
+    "magicmirror2",
+    "voice-assistant",
+    "ollama",
+    "whisper",
+    "piper",
+    "raspberry-pi",
+    "wardrobe",
+    "outfit"
+  ],
+  "engines": {
+    "node": ">=20.3"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
   }
 }
