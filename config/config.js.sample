@@ -1,28 +1,139 @@
 /**
- * MMM-AI-Jarvis sample config.
- * Copy relevant section into your MagicMirror config/config.js modules array.
+ * MMM-AI-Jarvis — sample configuration
+ *
+ * Copy the object below into the `modules: [ … ]` array of
+ * ~/MagicMirror/config/config.js. Every option is optional; the values shown
+ * are the defaults. Only include what you want to change – nested sections
+ * are merged with the defaults, so `llm: { model: "qwen3.5:2b" }` keeps every
+ * other llm option.
+ *
+ * Everything runs locally: whisper.cpp (speech-to-text), Ollama (language +
+ * vision model) and Piper (voice). See README.md for setup.
  */
 {
   module: "MMM-AI-Jarvis",
-  position: "bottom_center",  // any MagicMirror position
+  position: "lower_third",                       // middle_center and bottom_center also work well
   config: {
-    // Required
-    projectId: "your-gcp-project-id",
+    // ── Identity ───────────────────────────────────────────────────────────
+    assistantName: "Jarvis",
+    wakeWord: "jarvis",                          // say this first, e.g. "Jarvis, what should I wear?"
+    wakeWordAliases: ["jervis", "jarvus", "javis"], // common mis-hearings that also count
+    userName: "",                                // personalises replies, e.g. "Alex"
+    language: "en",                              // Whisper language code ("en", "de", "fr", "es", …)
+    locale: null,                                // date/time format; null = MagicMirror's `locale`
+    units: null,                                 // "metric" | "imperial"; null = MagicMirror's `units`
+    dataDir: "data",                             // wardrobe, memory and photos (inside the module folder)
+    debug: false,                                // verbose logs (transcripts, timings)
 
-    // Optional — defaults shown
-    location: "us-central1",
-    model: "gemini-1.5-pro-001",
-    activationKeyword: "jarvis",
-    speechLanguage: "en-US",
-    ttsVoice: {
-      languageCode: "en-US",
-      name: "en-US-Neural2-D",
-      ssmlGender: "MALE",
+    // ── Speech-to-text (whisper.cpp server) ──────────────────────────────
+    stt: {
+      whisperUrl: "http://127.0.0.1:8178",
     },
-    serviceAccountFile: "credentials.json",  // relative to module dir
-    maxTokens: 1024,
-    showTranscription: true,
-    showResponse: true,
-    responseTimeout: 5000,
-  }
+
+    // ── Text-to-speech ─────────────────────────────────────────────────────
+    tts: {
+      provider: "piper",                         // "piper" (natural) | "espeak" (robotic, zero setup)
+      piperUrl: "http://127.0.0.1:5005",         // persistent Piper server (fast); "" = CLI only
+      piperCommand: "~/.local/share/jarvis/piper-venv/bin/piper",       // CLI fallback
+      piperModel: "~/.local/share/jarvis/voices/en_GB-alan-medium.onnx", // CLI fallback voice
+      piperSpeaker: null,                        // speaker id for multi-speaker voices
+      piperLengthScale: null,                    // speaking speed: 0.9 = faster, 1.1 = slower
+      piperArgs: [],                             // extra CLI args passed to piper
+      espeakVoice: "en-us",
+      espeakSpeed: 165,
+    },
+
+    // ── Language & vision model (Ollama) ───────────────────────────────────
+    llm: {
+      ollamaUrl: "http://127.0.0.1:11434",       // or a faster PC on your LAN, e.g. "http://192.168.1.50:11434"
+      model: "qwen3.5:4b",                       // 8 GB Pi 5: qwen3.5:4b · 4 GB: qwen3.5:2b · LAN PC: qwen3.5:9b
+      visionModel: "",                           // "" = use `model` (qwen3.5 can see)
+      keepAlive: "30m",                          // keep the model in RAM between questions (-1 = forever)
+      temperature: 0.6,
+      maxTokens: 400,
+      contextSize: 8192,
+      think: false,                              // slower but more careful reasoning on thinking models
+      fastIntents: true,                         // handle common requests without the LLM (faster, reliable on small models)
+    },
+
+    // ── Microphone, speaker & voice detection ─────────────────────────────
+    audio: {
+      micDevice: "default",                      // ALSA device, e.g. "plughw:1,0" (list with: arecord -L)
+      speakerDevice: "default",                  // ALSA device (list with: aplay -L)
+      vadThreshold: 500,                         // minimum loudness counted as speech (raise if noise triggers it)
+      noiseMultiplier: 3,                        // speech must be this many × louder than room noise
+      silenceMs: 900,                            // pause that ends a sentence
+      preRollMs: 400,                            // audio kept from just before speech started
+      minUtteranceMs: 350,
+      maxUtteranceMs: 15000,
+      allowBargeIn: true,                        // "Jarvis, stop" while speaking; set false if Jarvis hears itself
+      chime: true,                               // soft tone when the wake word is heard on its own
+      chimeVolume: 0.25,
+    },
+
+    // ── Camera (vision & wardrobe) ─────────────────────────────────────────
+    camera: {
+      enabled: true,
+      tool: "auto",                              // auto | rpicam-still | libcamera-still | fswebcam | ffmpeg | custom
+      device: "/dev/video0",                     // USB webcam device
+      width: 960,                                // larger photos make the vision model much slower
+      height: 720,
+      rotation: 0,                               // 0 or 180
+      flip: false,                               // horizontal mirror
+      warmupMs: 1200,                            // let auto-exposure settle
+      customCommand: [],                         // for tool "custom": argv that writes a JPEG to stdout ({width} {height} {device})
+    },
+
+    // ── Weather for outfit planning ────────────────────────────────────────
+    // Leave null to reuse MagicMirror's built-in weather module (no extra calls).
+    // Set coordinates to fetch from Open-Meteo instead (free, no API key).
+    weather: {
+      latitude: null,
+      longitude: null,
+      locationName: "",
+    },
+
+    // ── Live sports scores (ESPN public feed, no API key) ──────────────────
+    sports: {
+      enabled: true,
+      // Leagues searched when you don't name one. Available: nfl, ncaaf, nba, wnba, ncaab, mlb, nhl,
+      // epl, championship, laliga, bundesliga, seriea, ligue1, mls, ucl, uel
+      leagues: ["nfl", "nba", "mlb", "nhl", "epl", "mls", "ucl", "laliga", "bundesliga", "seriea"],
+    },
+
+    // ── Web search (optional, self-hosted) ─────────────────────────────────
+    search: {
+      searxngUrl: "",                            // e.g. "http://127.0.0.1:8888" – leave empty to disable
+    },
+
+    // ── Your own voice commands → MagicMirror notifications ────────────────
+    // Drive any other module by voice. Examples:
+    customCommands: [
+      // { phrases: ["next page", "page forward"], notification: "PAGE_INCREMENT", reply: "Next page." },        // MMM-pages
+      // { phrases: ["previous page"], notification: "PAGE_DECREMENT", reply: "Going back." },
+      // { phrases: ["show my alerts"], notification: "SHOW_ALERT", payload: { title: "Hi", message: "Hello!" } },
+    ],
+
+    // ── Conversation ───────────────────────────────────────────────────────
+    conversation: {
+      listenTimeout: 8000,                       // after "Jarvis" alone, how long to wait for the question
+      followUpWindow: 8000,                      // reply without the wake word for this long after an answer (0 = off)
+      historyTurns: 6,                           // remembered exchanges within a conversation
+      resetAfter: 300000,                        // start a fresh conversation after 5 idle minutes
+    },
+
+    // ── Display ────────────────────────────────────────────────────────────
+    display: {
+      showTranscription: true,
+      showResponse: true,
+      clearAfter: 30000,                         // hide the conversation after this long idle (0 = never)
+      maxWidgets: 4,                             // cards on screen at once (running timers are never dropped)
+      cardTimeout: 90000,                        // outfit / wardrobe cards
+      infoTimeout: 180000,                       // info panels Jarvis puts on screen
+      snapshotTimeout: 8000,                     // camera preview
+      errorTimeout: 6000,
+      showProblems: true,                        // show setup problems (e.g. Ollama not running) on the mirror
+      autoHide: ["compliments"],                 // modules faded out while Jarvis is showing something
+    },
+  },
 }

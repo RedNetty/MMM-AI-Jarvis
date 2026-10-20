@@ -1,16 +1,16 @@
 node_modules/
-credentials.json
-output.mp3
+package-lock.json
+
+# Personal data: wardrobe, memory and photos
+data/
+
+# Local config copies
 config/config.js
 .env
 *.log
+
+# Editors / OS
 .idea/
+.vscode/
 .DS_Store
-
-# Build artifacts and OS files
-target/
-*.class
-*.jar
-!*-sources.jar
 Thumbs.db
-
