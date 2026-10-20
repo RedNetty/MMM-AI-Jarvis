@@ -12,7 +12,7 @@ images never leave the house.
 
 <p align="center"><img src="docs/screenshot.png" width="440" alt="Jarvis on a MagicMirror showing an outfit suggestion, a live Premier League score and a pasta timer"></p>
 
-<p align="center"><a href="docs/ui-gallery.png">All states and cards</a> · <a href="docs/mirror-real.png">A full mirror after real requests</a></p>
+<p align="center"><a href="#screenshots">Screenshots of every feature</a> · <a href="docs/ui-gallery.png">All states and cards</a></p>
 
 ---
 
@@ -20,13 +20,14 @@ images never leave the house.
 
 - [Features](#features)
 - [How it works](#how-it-works)
+- [Screenshots](#screenshots)
 - [Hardware](#hardware)
 - [Installation](#installation)
+- [Running on a Mac (fastest)](#running-on-a-mac-fastest)
 - [Things to say](#things-to-say)
 - [Building your wardrobe](#building-your-wardrobe)
 - [Controlling the mirror](#controlling-the-mirror)
 - [Configuration](#configuration)
-- [Running the model on another computer](#running-the-model-on-another-computer)
 - [Notifications API](#notifications-api)
 - [Privacy](#privacy)
 - [Troubleshooting](#troubleshooting)
@@ -93,38 +94,51 @@ around that, and each choice below was measured:
   `base.en` with the same accuracy in testing), the Piper voice kept loaded as a service (10–25×
   faster than starting it per sentence), and the model kept in memory (`keepAlive: -1`).
 
+## Screenshots
+
+Captured from the real module running in MagicMirror 2.38, each after a real request (except where
+noted). Full size in [`docs/features`](docs/features).
+
+| | | |
+|---|---|---|
+| ![Idle](docs/features/01-idle.png)<br>**Idle** | ![Outfit](docs/features/02-outfit.png)<br>**"What should I wear to dinner tonight?"** | ![Weather](docs/features/03-weather.png)<br>**"Will I need an umbrella tomorrow?"** |
+| ![Next game](docs/features/04-next-game.png)<br>**"When do the Lakers play?"** | ![Live score](docs/features/05-live-score-demo.png)<br>**Live score** (demo data) | ![Timer](docs/features/06-timer.png)<br>**"Set a pasta timer for 10 minutes"** |
+| ![Panel](docs/features/07-info-panel.png)<br>**"Put a packing list for the beach on the mirror"** | ![Focus](docs/features/08-focus-mode.png)<br>**"Focus mode"** | ![Scanning](docs/features/09-camera-scanning.png)<br>**"Add these clothes to my wardrobe"** |
+| ![Added](docs/features/10-wardrobe-added.png)<br>**…added, with photo crops** | ![Warning](docs/features/11-setup-warning-example.png)<br>**Setup problem shown on the mirror** (example) | |
+
 ## Hardware
 
 | Setup | Model | Notes |
 |---|---|---|
-| **Raspberry Pi 5, 8 GB** (recommended) | `qwen3.5:2b` | Everything on the mirror. Use active cooling: the LLM keeps all cores busy while it thinks |
+| **Apple Silicon Mac** (M1 or newer) driving the mirror | `qwen3.5:4b` | Fastest: the model runs on the Mac's GPU. A Mac with a broken built-in screen is ideal. See [Running on a Mac](#running-on-a-mac-fastest) |
+| **Raspberry Pi + a Mac on your network** | `qwen3.5:4b` on the Mac | The Pi drives the mirror; the Mac does the thinking, with the Pi as automatic fallback |
+| Raspberry Pi 5, 8 GB | `qwen3.5:2b` | Everything on the Pi. Use active cooling: the LLM keeps all cores busy while it thinks |
 | Raspberry Pi 5, 4 GB | `qwen3.5:2b` | Fits comfortably (~2.7 GB for the model) |
 | Raspberry Pi 4, 8 GB | `qwen3.5:2b` | Usable, but noticeably slower for open questions |
-| Pi + a PC/Mac on your network | `qwen3.5:9b` or larger | Fastest and smartest. See [Running the model on another computer](#running-the-model-on-another-computer) |
 
 `qwen3.5:4b` gives somewhat better answers but generated about 35% slower in testing. `qwen3.5:2b`
 is also the smallest recommended: `qwen3.5:0.8b` sometimes claimed to have done things (like saving
 a preference) without actually calling the tool.
 
 **What to expect.** Measured end to end inside MagicMirror 2.38 on a 4-core x86 test VM with
-**no GPU**, running `qwen3.5:2b`. These are **not Raspberry Pi measurements**: a Pi 5 will be
-slower for anything that uses the language model; a PC with a GPU is much faster. Times are from
-the end of your sentence, after speech recognition (whisper `tiny.en`: ~0.7 s).
+**no GPU**, running `qwen3.5:2b`, from asking to Jarvis having **finished speaking** the answer.
+These are **not Raspberry Pi or Mac measurements**: a Pi 5 will be slower for anything that uses
+the language model, and an Apple Silicon Mac much faster (it runs the model on its GPU). Speech
+recognition adds ~0.7 s on this machine (whisper `tiny.en`).
 
 | Request | How it's answered | Time |
 |---|---|---|
-| "What should I wear today?" | rule-based planner | **instant** (~0.01 s) |
-| "Will I need an umbrella tomorrow?" | from the forecast | **instant** |
-| "Set a pasta timer for 10 minutes" / "hide the news" / "I hate wearing orange" | fast intent | **instant** |
-| "What's the score of the Pistons game?" | ESPN feed | ~0.2 s |
-| Open questions ("a fun fact about octopuses") | LLM, streamed | first words in **~3.5–6 s** |
-| "Put a packing list for the beach on the mirror" | structured panel | instant "Sure…", panel in ~9–14 s |
-| "How do I look?" | vision | instant "Let me take a look", answer in up to ~35 s |
-| "Add these clothes to my wardrobe" (3 items) | vision + cataloguing | instant acknowledgement, up to ~60 s |
+| "What should I wear to dinner tonight?" | rule-based planner | **0.7 s** |
+| "Will I need an umbrella tomorrow?" | from the forecast | **0.3 s** |
+| "Set a pasta timer for 10 minutes" / "focus mode" / "I hate wearing orange" | fast intent | **0.2–0.3 s** |
+| "When do the Lakers play?" | ESPN feed | **0.8 s** |
+| Open questions ("a fun fact about octopuses") | language model, streamed | first words in **~3.5–6 s** |
+| "Put a packing list for the beach on the mirror" | language model | "Sure…" at once, panel in ~12 s |
+| "Add these clothes to my wardrobe" | vision model | acknowledgement at once, ~50–100 s |
 
-The Piper voice adds 0.1–0.4 s per sentence. For faster open questions and camera features,
-[offload the model](#running-the-model-on-another-computer) to a faster machine. Everything in
-the "instant" rows stays instant either way.
+Everything above the line between instant and model-based stays instant on any hardware. To
+make the model-based rows fast, run the model on an Apple Silicon Mac
+([below](#running-on-a-mac-fastest)): it's the single biggest speed-up.
 
 You'll also need:
 
@@ -219,6 +233,77 @@ If something isn't running, Jarvis shows the problem in amber on the mirror (for
 *"Cannot reach Ollama…"*) and keeps re-checking, so services that start after MagicMirror at boot
 are picked up automatically.
 
+## Running on a Mac (fastest)
+
+An Apple Silicon Mac (M1 or newer) runs the language model, speech recognition and the voice on
+its GPU, which makes the model-based features dramatically faster than on a Pi's CPU. A MacBook with
+a **broken built-in screen** works perfectly: it never needs its own display.
+
+There are two ways to use it.
+
+**A. The Mac is the mirror computer (no Pi).** Connect the mirror's display to the Mac (USB-C to
+HDMI) and plug a USB microphone, speaker and (optionally) webcam into the Mac.
+
+```bash
+git clone https://github.com/MagicMirrorOrg/MagicMirror ~/MagicMirror
+cd ~/MagicMirror && npm run install-mm
+git clone https://github.com/RedNetty/MMM-AI-Jarvis.git modules/MMM-AI-Jarvis
+modules/MMM-AI-Jarvis/scripts/setup-mac.sh
+```
+
+Add the config block it prints to `~/MagicMirror/config/config.js`, then start the mirror from
+`~/MagicMirror` with `./node_modules/.bin/electron js/electron.js` (MagicMirror's own
+`npm run start` adds Linux-only display flags). On macOS, Jarvis uses `ffmpeg` for the microphone and camera
+and the built-in `afplay` for sound; the setup script installs ffmpeg. The first time, macOS asks
+for **microphone and camera permission**; allow it.
+
+**B. The Mac is the brain for a Raspberry Pi mirror.** The Pi keeps driving the display, mic,
+speaker and camera, and sends the heavy work to the Mac over your home network.
+
+```bash
+# On the Mac
+scripts/setup-mac.sh --share
+
+# On the Pi (macbook.local = the name setup-mac.sh prints)
+scripts/setup-pi.sh --brain macbook.local
+```
+
+The Pi's config then lists the Mac first and the Pi itself as a fallback:
+
+```js
+stt: { whisperUrl: ["http://macbook.local:8178", "http://127.0.0.1:8178"] },
+tts: { piperUrl: ["http://macbook.local:5005", "http://127.0.0.1:5005"] },
+llm: {
+  servers: [
+    { url: "http://macbook.local:11434", model: "qwen3.5:4b" },
+    { url: "http://127.0.0.1:11434", model: "qwen3.5:2b" },
+  ],
+},
+```
+
+Jarvis checks each server in the background every 15 seconds. If the Mac is asleep or off, requests
+go straight to the Pi with no waiting for timeouts. When the Mac comes back, Jarvis loads the model
+there in the background and switches to it. This was tested in MagicMirror by stopping and starting
+a second Ollama mid-session.
+
+**What the setup script does on the Mac:**
+- Installs Ollama, ffmpeg, cmake and Python with Homebrew; builds whisper.cpp with Metal; installs Piper.
+- Runs Ollama, whisper and Piper as **LaunchAgents**: they start when you log in and restart if
+  they stop. Logs are in `~/Library/Logs/jarvis-*.log`. Turn on automatic login (System Settings →
+  Users & Groups) so a reboot needs no screen.
+- Keeps the Mac awake on power, including with the lid closed (`pmset`). Use `--keep-sleep` to skip.
+  To undo: `sudo pmset -a disablesleep 0`.
+- With `--share`: listens on your network and allows the services through the macOS firewall.
+  These services have no password, so only use `--share` on a home network you trust.
+
+Tips for a screenless Mac: control it from another computer with **Screen Sharing** (enable
+System Settings → General → Sharing → Screen Sharing, then connect to `vnc://macbook.local`) or
+SSH (Sharing → Remote Login). With the lid closed, a MacBook's own microphone and camera switch
+off, so use USB ones.
+
+Any other computer with a GPU can be the brain too: install Ollama, set `OLLAMA_HOST=0.0.0.0`, and
+list it in `llm.servers`.
+
 ## Things to say
 
 Start with the wake word, then ask. After an answer, you have a few seconds to follow up **without**
@@ -305,7 +390,7 @@ fully commented copy.
 
 | Option | Default | Description |
 |---|---|---|
-| `whisperUrl` | `"http://127.0.0.1:8178"` | whisper.cpp server |
+| `whisperUrl` | `"http://127.0.0.1:8178"` | whisper.cpp server, or a list for failover (e.g. a Mac, then the Pi) |
 </details>
 
 <details>
@@ -314,7 +399,7 @@ fully commented copy.
 | Option | Default | Description |
 |---|---|---|
 | `provider` | `"piper"` | `"piper"` or `"espeak"` (robotic but needs no setup) |
-| `piperUrl` | `"http://127.0.0.1:5005"` | Piper voice server (keeps the voice loaded, ~0.2 s per sentence) |
+| `piperUrl` | `"http://127.0.0.1:5005"` | Piper voice server (keeps the voice loaded, ~0.2 s per sentence), or a list for failover |
 | `piperCommand` / `piperModel` | setup-script paths | Piper CLI fallback, used automatically if the server is down |
 | `piperSpeaker` | `null` | Speaker id for multi-speaker voices |
 | `piperLengthScale` | `null` | Speaking speed (`0.9` faster, `1.1` slower) |
@@ -328,6 +413,7 @@ If Piper isn't reachable at all, Jarvis falls back to espeak-ng and says so on t
 
 | Option | Default | Description |
 |---|---|---|
+| `servers` | `[]` | Several Ollama servers in order of preference, each `{ url, model }` (e.g. a Mac, then the Pi). Empty = `ollamaUrl` + `model` |
 | `ollamaUrl` | `"http://127.0.0.1:11434"` | Ollama server (can be another computer) |
 | `model` | `"qwen3.5:2b"` | Any Ollama model. Use one with *tools* and *vision* for all features |
 | `visionModel` | `""` | Separate model for camera images (empty = `model`) |
@@ -343,8 +429,8 @@ If Piper isn't reachable at all, Jarvis falls back to espeak-ng and says so on t
 
 | Option | Default | Description |
 |---|---|---|
-| `micDevice` | `"default"` | ALSA capture device (`arecord -L`), e.g. `"plughw:1,0"`. `"none"` disables the mic |
-| `speakerDevice` | `"default"` | ALSA playback device (`aplay -L`) |
+| `micDevice` | `"default"` | Pi: ALSA device (`arecord -L`), e.g. `"plughw:1,0"`. Mac: `"default"`, an index or a name (`ffmpeg -f avfoundation -list_devices true -i ""`). `"none"` disables the mic |
+| `speakerDevice` | `"default"` | Pi: ALSA playback device (`aplay -L`). Mac: uses the system output (System Settings → Sound) |
 | `vadThreshold` | `500` | Minimum loudness counted as speech; raise it if noise triggers Jarvis |
 | `noiseMultiplier` | `3` | Speech must be this many times louder than the room |
 | `silenceMs` | `750` | Pause that ends a sentence (lower is snappier but may cut off slow talkers) |
@@ -359,8 +445,8 @@ If Piper isn't reachable at all, Jarvis falls back to espeak-ng and says so on t
 | Option | Default | Description |
 |---|---|---|
 | `enabled` | `true` | Turn vision features on/off |
-| `tool` | `"auto"` | `rpicam-still`, `libcamera-still`, `fswebcam`, `ffmpeg`, `custom`, or `auto` |
-| `device` | `"/dev/video0"` | USB webcam device |
+| `tool` | `"auto"` | `rpicam-still`, `libcamera-still`, `fswebcam`, `ffmpeg`, `custom`, or `auto` (on a Mac: ffmpeg) |
+| `device` | `"/dev/video0"` | Pi: USB webcam device. Mac: `"default"`, an index or a camera name |
 | `width` / `height` | `960` / `720` | Photo size. Bigger photos make vision noticeably slower (1280×960 took ~1.8× as long in testing) |
 | `rotation` / `flip` | `0` / `false` | `180` for an upside-down camera; `flip` mirrors horizontally |
 | `warmupMs` | `1200` | Time for auto-exposure to settle |
@@ -398,22 +484,6 @@ provider; `openmeteo` needs no key), which Jarvis listens to automatically.
 | `display.autoHide` | `["compliments"]` | Modules faded out while Jarvis is active |
 | `display.showProblems` | `true` | Show setup problems on the mirror |
 </details>
-
-## Running the model on another computer
-
-The language model is the slowest part on a Pi. Any Mac, Windows or Linux PC on your network can run
-it instead, and a gaming GPU makes answers near-instant.
-
-1. Install [Ollama](https://ollama.com/download) on the PC and pull a model: `ollama pull qwen3.5:9b`
-2. Let it accept network connections by setting the environment variable `OLLAMA_HOST=0.0.0.0` and
-   restarting Ollama ([how](https://github.com/ollama/ollama/blob/main/docs/faq.md#how-do-i-configure-ollama-server)).
-3. Point Jarvis at it:
-   ```js
-   llm: { ollamaUrl: "http://192.168.1.50:11434", model: "qwen3.5:9b" },
-   ```
-4. Run `scripts/setup-pi.sh --no-ollama` on the Pi.
-
-Speech recognition and the voice stay on the Pi; they're light enough.
 
 ## Notifications API
 
@@ -461,7 +531,8 @@ Example: show a daily outfit at 7:30 with [MMM-ModuleScheduler](https://github.c
 | Wake word misheard | Add the mis-hearing to `wakeWordAliases` (turn on `debug` to see transcripts) |
 | "Camera … no capture tool found" | Pi camera: `rpicam-still --list-cameras`. USB: `sudo apt install fswebcam` |
 | Outfits ignore the weather | Add MagicMirror's `weather` module or set `weather.latitude/longitude` |
-| Slow answers | Keep `fastIntents: true` and `outfitPlanner: "fast"`, use `qwen3.5:2b`, or run the model on another computer. Turn on `debug` to see prompt and generation times for every request |
+| Slow answers | Keep `fastIntents: true` and `outfitPlanner: "fast"`, use `qwen3.5:2b`, or run the model on a Mac. Turn on `debug` to see which server answered and its prompt and generation times for every request |
+| The Mac isn't used | From the Pi: `curl http://macbook.local:11434/api/version`. If that fails, check the Mac is awake, on the same network, and was set up with `--share` |
 
 ## Upgrading from v2
 
@@ -495,14 +566,16 @@ MMM-AI-Jarvis/
 │   ├── Widgets.js          # Live cards with expiry and self-refresh
 │   ├── Screen.js           # Knows and controls other modules on the mirror
 │   ├── Sports.js           # ESPN public scoreboards
-│   ├── Ollama.js           # Local LLM client (capability-aware)
+│   ├── Ollama.js           # Local LLM client (capability-aware, multi-server)
+│   ├── ServerPool.js       # Health-checked failover between servers (Mac → Pi)
 │   ├── Wardrobe.js, Memory.js, JsonStore.js
 │   ├── Weather.js, Camera.js, WebSearch.js
 │   ├── audio/              # Microphone, voice activity detector, speech queue, speaker, WAV/chime
 │   ├── stt/                # whisper.cpp client
 │   └── tts/                # Piper (server + CLI) and espeak-ng
 ├── docs/                   # Screenshots
-├── scripts/setup-pi.sh     # Installs the local AI stack
+├── scripts/setup-pi.sh     # Installs the local AI stack on a Raspberry Pi
+├── scripts/setup-mac.sh    # Installs it on an Apple Silicon Mac (mirror computer or brain)
 ├── config/config.js.sample
 └── test/
 ```

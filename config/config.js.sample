@@ -27,13 +27,14 @@
 
     // ── Speech-to-text (whisper.cpp server) ──────────────────────────────
     stt: {
-      whisperUrl: "http://127.0.0.1:8178",
+      whisperUrl: "http://127.0.0.1:8178",       // or a list: a Mac first, the Pi as fallback, e.g.
+                                                 // ["http://macbook.local:8178", "http://127.0.0.1:8178"]
     },
 
     // ── Text-to-speech ─────────────────────────────────────────────────────
     tts: {
       provider: "piper",                         // "piper" (natural) | "espeak" (robotic, zero setup)
-      piperUrl: "http://127.0.0.1:5005",         // persistent Piper server (fast); "" = CLI only
+      piperUrl: "http://127.0.0.1:5005",         // persistent Piper server (fast); a list for failover; "" = CLI only
       piperCommand: "~/.local/share/jarvis/piper-venv/bin/piper",       // CLI fallback
       piperModel: "~/.local/share/jarvis/voices/en_GB-alan-medium.onnx", // CLI fallback voice
       piperSpeaker: null,                        // speaker id for multi-speaker voices
@@ -45,7 +46,14 @@
 
     // ── Language & vision model (Ollama) ───────────────────────────────────
     llm: {
-      ollamaUrl: "http://127.0.0.1:11434",       // or a faster PC on your LAN, e.g. "http://192.168.1.50:11434"
+      // Run the model on a faster computer (e.g. an Apple Silicon Mac set up with setup-mac.sh --share),
+      // falling back to the Pi when it's off. Each server has its own model:
+      // servers: [
+      //   { url: "http://macbook.local:11434", model: "qwen3.5:4b" },
+      //   { url: "http://127.0.0.1:11434", model: "qwen3.5:2b" },
+      // ],
+      servers: [],                               // empty = use ollamaUrl + model below
+      ollamaUrl: "http://127.0.0.1:11434",
       model: "qwen3.5:2b",                       // fastest on a Pi · qwen3.5:4b smarter but ~35% slower · LAN PC: qwen3.5:9b
       visionModel: "",                           // "" = use `model` (qwen3.5 can see)
       keepAlive: -1,                             // keep the model in RAM (-1 = forever); reloading from SD card is slow

@@ -18,7 +18,9 @@
 #   --voice NAME          Piper voice (default: en_GB-alan-medium)
 #   --whisper-port PORT   Port for the whisper server (default: 8178)
 #   --piper-port PORT     Port for the Piper voice server (default: 5005)
-#   --no-ollama           Skip Ollama (e.g. you run it on another PC on your network)
+#   --brain HOST          A Mac (or PC) on your network set up with setup-mac.sh --share,
+#                         e.g. macbook.local. Jarvis uses it first and falls back to this Pi.
+#   --no-ollama           Skip Ollama on the Pi (no local fallback when the brain is off)
 #   --no-whisper          Skip whisper.cpp
 #   --no-piper            Skip Piper
 #   -h, --help            Show this help
@@ -33,6 +35,7 @@ PIPER_PORT=5005
 DO_OLLAMA=1
 DO_WHISPER=1
 DO_PIPER=1
+BRAIN=""
 
 JARVIS_HOME="${HOME}/.local/share/jarvis"
 WHISPER_DIR="${JARVIS_HOME}/whisper.cpp"
@@ -53,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     --voice)         VOICE="${2:?}"; shift 2 ;;
     --whisper-port)  WHISPER_PORT="${2:?}"; shift 2 ;;
     --piper-port)    PIPER_PORT="${2:?}"; shift 2 ;;
+    --brain)         BRAIN="${2:?}"; shift 2 ;;
     --no-ollama)     DO_OLLAMA=0; shift ;;
     --no-whisper)    DO_WHISPER=0; shift ;;
     --no-piper)      DO_PIPER=0; shift ;;
@@ -248,6 +252,36 @@ arecord -l 2>/dev/null | grep -q '^card' && info "Microphone ........ found" || 
 LANG_CODE="en"
 [[ "$WHISPER_MODEL" == *.en ]] || LANG_CODE="${V_LANG:-en}"
 
+if [[ -n "$BRAIN" ]]; then
+  if curl -fsS -o /dev/null --max-time 3 "http://${BRAIN}:11434/api/version"; then
+    info "Brain at ${BRAIN} ..... OK"
+  else
+    warn "Can't reach Ollama on ${BRAIN} yet. Run scripts/setup-mac.sh --share on it."
+  fi
+  LOCAL_LLM=""
+  if (( DO_OLLAMA )); then
+    LOCAL_LLM=$'\n'"          { url: \"http://127.0.0.1:11434\", model: \"${MODEL}\" },"
+  fi
+  BRAIN_CONFIG="      stt: { whisperUrl: [\"http://${BRAIN}:8178\", \"http://127.0.0.1:${WHISPER_PORT}\"] },
+      tts: {
+        piperUrl: [\"http://${BRAIN}:5005\", \"http://127.0.0.1:${PIPER_PORT}\"],
+        piperModel: \"${VOICE_DIR}/${VOICE}.onnx\",
+      },
+      llm: {
+        servers: [
+          { url: \"http://${BRAIN}:11434\", model: \"qwen3.5:4b\" },${LOCAL_LLM}
+        ],
+      },"
+else
+  BRAIN_CONFIG="      stt: { whisperUrl: \"http://127.0.0.1:${WHISPER_PORT}\" },
+      tts: {
+        piperUrl: \"http://127.0.0.1:${PIPER_PORT}\",
+        piperCommand: \"${PIPER_VENV}/bin/piper\",
+        piperModel: \"${VOICE_DIR}/${VOICE}.onnx\",
+      },
+      llm: { model: \"${MODEL}\" },"
+fi
+
 bold "Done! Add this to the modules array in ~/MagicMirror/config/config.js:"
 cat <<EOF
 
@@ -256,13 +290,7 @@ cat <<EOF
     position: "lower_third",
     config: {
       language: "${LANG_CODE}",
-      stt: { whisperUrl: "http://127.0.0.1:${WHISPER_PORT}" },
-      tts: {
-        piperUrl: "http://127.0.0.1:${PIPER_PORT}",
-        piperCommand: "${PIPER_VENV}/bin/piper",
-        piperModel: "${VOICE_DIR}/${VOICE}.onnx",
-      },
-      llm: { model: "${MODEL}" },
+${BRAIN_CONFIG}
     },
   },
 

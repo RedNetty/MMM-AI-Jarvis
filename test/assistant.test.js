@@ -260,14 +260,59 @@ test("health check reports missing models and unreachable server", async () => {
   const server = await fakeOllama({ reply: () => ({}) });
   try {
     const ok = new Ollama({ url: server.url, model: "test-model" });
-    assert.deepEqual(await ok.healthCheck(), []);
+    assert.deepEqual(await ok.healthCheck(), { problems: [], usable: true });
     const missing = new Ollama({ url: server.url, model: "other:2b" });
-    assert.match((await missing.healthCheck())[0], /ollama pull other:2b/);
+    const m = await missing.healthCheck();
+    assert.equal(m.usable, false);
+    assert.match(m.problems[0], /ollama pull other:2b/);
   } finally {
     await server.close();
   }
   const down = new Ollama({ url: "http://127.0.0.1:9", model: "x" });
-  assert.match((await down.healthCheck())[0], /Cannot reach Ollama/);
+  const d = await down.healthCheck();
+  assert.equal(d.usable, false);
+  assert.match(d.problems[0], /Cannot reach Ollama/);
+});
+
+test("failover: a sleeping Mac falls back to the Pi, each with its own model", async () => {
+  const pi = await fakeOllama({ reply: (body) => ({ role: "assistant", content: `answer from ${body.model}` }) });
+  try {
+    const ollama = new Ollama({
+      servers: [
+        { url: "http://127.0.0.1:9", model: "qwen3.5:4b" }, // the Mac, asleep (nothing listening)
+        { url: pi.url, model: "test-model" },
+      ],
+    });
+    const health = await ollama.healthCheck();
+    assert.equal(health.usable, true);
+    assert.deepEqual(health.problems, [], "an unreachable preferred server isn't a problem while another answers");
+    assert.equal(ollama.url, pi.url);
+
+    const res = await ollama.chat({ system: "s", messages: [{ role: "user", content: "hi" }] });
+    assert.equal(res.text, "answer from test-model", "the Pi's own model is used");
+
+    // Even without a health check, a failing request moves on to the next server.
+    const fresh = new Ollama({ servers: [{ url: "http://127.0.0.1:9", model: "big" }, { url: pi.url, model: "test-model" }] });
+    assert.equal((await fresh.generate({ prompt: "hi" })), "answer from test-model");
+    assert.equal(fresh.pool.servers[0].up, false);
+  } finally {
+    await pi.close();
+  }
+});
+
+test("failover: traffic returns to the preferred server once it is back", async () => {
+  const pi = await fakeOllama({ reply: () => ({ role: "assistant", content: "pi" }) });
+  const mac = await fakeOllama({ reply: () => ({ role: "assistant", content: "mac" }) });
+  try {
+    const ollama = new Ollama({ servers: [{ url: mac.url, model: "test-model" }, { url: pi.url, model: "test-model" }] });
+    ollama.pool.servers[0].up = false; // the Mac was asleep at the last probe
+    assert.equal(await ollama.generate({ prompt: "x" }), "pi");
+    await ollama.pool.probeAll(); // the Mac woke up
+    assert.equal(await ollama.generate({ prompt: "x" }), "mac");
+  } finally {
+    await pi.close();
+    await mac.close();
+  }
 });
 
 test("outfit card includes pieces the model names aloud but omits from item_ids", async () => {
@@ -355,4 +400,31 @@ test("fast outfit planner and weather answers need no language model", async () 
   } finally {
     await server.close();
   }
+});
+
+test("a scan cut off at the token limit keeps the items that were complete", async () => {
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+  const camera = { available: true, tool: "fake", capture: async () => ({ jpeg, width: 960, height: 720 }) };
+  const item = (name) => `{"name":"${name}","category":"top","colors":["navy"],"formality":"casual","warmth":2,"bbox_2d":[100,100,400,400]}`;
+  const server = await fakeOllama({
+    // Truncated mid-way through the third item, as when num_predict runs out.
+    reply: () => ({ role: "assistant", content: `{"items":[${item("Navy shirt")},${item("White tee")},{"name":"Grey hood` }),
+  });
+  try {
+    const { assistant, wardrobe } = build(server.url, { camera });
+    await assistant.skills.init();
+    const reply = await assistant.ask("add these clothes to my wardrobe");
+    assert.deepEqual(wardrobe.items.map((i) => i.name), ["Navy shirt", "White tee"]);
+    assert.equal(reply, "Got it. I've added Navy shirt and White tee to your wardrobe.");
+  } finally {
+    await server.close();
+  }
+});
+
+test("JSON repair closes cut-off output and ignores brackets inside strings", () => {
+  const { repairJson } = Ollama;
+  assert.equal(repairJson('{"items":[{"a":1},{"b":2},{"c":'), '{"items":[{"a":1},{"b":2}]}');
+  assert.equal(repairJson('{"items":[{"name":"x, y]"}], "more":true}'), '{"items":[{"name":"x, y]"}], "more":true}');
+  assert.equal(repairJson('Sure! {"a":[1,2]} hope that helps'), '{"a":[1,2]}');
+  assert.equal(repairJson('{"items":[{"a":'), null);
 });

@@ -177,3 +177,40 @@ test("SpeechQueue stops on abort and reports synthesis errors", async () => {
   failing.push("hello");
   await assert.rejects(failing.finish(), /tts down/);
 });
+
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const Microphone = require("../lib/audio/Microphone");
+const Speaker = require("../lib/audio/Speaker");
+const Camera = require("../lib/Camera");
+
+test("macOS: microphone and camera use ffmpeg with AVFoundation", () => {
+  assert.deepEqual(new Microphone({ platform: "darwin" }).command().slice(0, 9), [
+    "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-f", "avfoundation", "-i", ":default",
+  ]);
+  assert.equal(new Microphone({ platform: "darwin", device: "2" }).command()[8], ":2");
+  assert.equal(new Microphone({ platform: "linux" }).command()[0], "arecord");
+
+  const cam = new Camera({ platform: "darwin", device: "/dev/video0", width: 960, rotation: 180 })._command("ffmpeg");
+  assert.equal(cam[cam.indexOf("-i") + 1], "default:none", "Linux device paths fall back to the default Mac camera");
+  assert.equal(cam[cam.indexOf("-video_size") + 1], "1280x720");
+  assert.match(cam[cam.indexOf("-vf") + 1], /scale=960:-2,hflip,vflip$/);
+});
+
+test("macOS: speaker plays through afplay from a temporary file", async () => {
+  // Stand-in afplay that records the file it was given.
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-bin-"));
+  const record = path.join(bin, "played");
+  fs.writeFileSync(path.join(bin, "afplay"), `#!/bin/sh\ncp "$1" "${record}"\n`, { mode: 0o755 });
+  const PATH = process.env.PATH;
+  process.env.PATH = `${bin}:${PATH}`;
+  try {
+    const wav = pcmToWav(Buffer.alloc(320), 16000);
+    const result = await new Speaker({ platform: "darwin" }).play(wav);
+    assert.deepEqual(result, { interrupted: false });
+    assert.deepEqual(fs.readFileSync(record), wav);
+  } finally {
+    process.env.PATH = PATH;
+  }
+});

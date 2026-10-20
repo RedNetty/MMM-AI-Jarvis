@@ -16,12 +16,12 @@ Module.register("MMM-AI-Jarvis", {
     debug: false,
 
     stt: {
-      whisperUrl: "http://127.0.0.1:8178",
+      whisperUrl: "http://127.0.0.1:8178", // or a list, e.g. a Mac first, then the Pi: ["http://macbook.local:8178", "http://127.0.0.1:8178"]
     },
 
     tts: {
       provider: "piper", // "piper" | "espeak"
-      piperUrl: "http://127.0.0.1:5005",
+      piperUrl: "http://127.0.0.1:5005", // or a list, like whisperUrl
       piperCommand: "~/.local/share/jarvis/piper-venv/bin/piper",
       piperModel: "~/.local/share/jarvis/voices/en_GB-alan-medium.onnx",
       piperSpeaker: null,
@@ -32,6 +32,10 @@ Module.register("MMM-AI-Jarvis", {
     },
 
     llm: {
+      // Several Ollama servers in order of preference, each with its own model, e.g.
+      // [{ url: "http://macbook.local:11434", model: "qwen3.5:4b" }, { url: "http://127.0.0.1:11434", model: "qwen3.5:2b" }]
+      // Empty = just ollamaUrl + model below.
+      servers: [],
       ollamaUrl: "http://127.0.0.1:11434",
       model: "qwen3.5:2b", // fastest recommended; "qwen3.5:4b" is smarter but ~35% slower
       visionModel: "", // empty = same as model
