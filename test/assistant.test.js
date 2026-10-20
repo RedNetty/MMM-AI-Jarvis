@@ -17,7 +17,9 @@ const Widgets = require("../lib/Widgets");
 const Screen = require("../lib/Screen");
 
 /**
- * Fake Ollama server. `reply(body)` decides the /api/chat response.
+ * Fake Ollama server. `reply(body)` decides the /api/chat response. Streaming
+ * requests get NDJSON chunks like the real server: the content split in two
+ * deltas, then a final `done` chunk carrying any tool calls and stats.
  */
 async function fakeOllama({ capabilities = ["completion", "tools", "vision", "thinking"], reply }) {
   const requests = [];
@@ -30,7 +32,18 @@ async function fakeOllama({ capabilities = ["completion", "tools", "vision", "th
       res.setHeader("Content-Type", "application/json");
       if (req.url === "/api/show") return res.end(JSON.stringify({ capabilities }));
       if (req.url === "/api/tags") return res.end(JSON.stringify({ models: [{ name: "test-model:latest" }] }));
-      if (req.url === "/api/chat") return res.end(JSON.stringify({ message: reply(body, requests) }));
+      if (req.url === "/api/chat") {
+        const message = reply(body, requests);
+        if (!body.stream) return res.end(JSON.stringify({ message, done: true }));
+        res.setHeader("Content-Type", "application/x-ndjson");
+        const text = message.content ?? "";
+        const half = Math.ceil(text.length / 2);
+        for (const part of [text.slice(0, half), text.slice(half)]) {
+          if (part) res.write(`${JSON.stringify({ message: { role: "assistant", content: part }, done: false })}\n`);
+        }
+        const last = { role: "assistant", content: "", ...(message.tool_calls ? { tool_calls: message.tool_calls } : {}) };
+        return res.end(`${JSON.stringify({ message: last, done: true, prompt_eval_count: 42, eval_count: 7 })}\n`);
+      }
       res.statusCode = 404;
       res.end("{}");
     });
@@ -50,7 +63,8 @@ const CONFIG = {
   customCommands: [{ phrases: ["next page"], notification: "PAGE_INCREMENT", reply: "Next page." }],
 };
 
-function build(url, { camera = { available: false } } = {}) {
+function build(url, { camera = { available: false }, outfitPlanner = "fast" } = {}) {
+  const config = { ...CONFIG, llm: { ...CONFIG.llm, outfitPlanner } };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-assistant-"));
   const ollama = new Ollama({ url, model: "test-model", maxTokens: 100 });
   const wardrobe = new Wardrobe(dir);
@@ -68,44 +82,86 @@ function build(url, { camera = { available: false } } = {}) {
   const screen = new Screen();
   const skills = new Skills({
     ollama, wardrobe, memory, camera, weather, search: null, sports: null, widgets, screen,
-    config: CONFIG,
+    config,
   });
-  const assistant = new Assistant({ ollama, skills, memory, wardrobe, screen, config: CONFIG });
+  const assistant = new Assistant({ ollama, skills, memory, wardrobe, screen, config });
   return { ollama, wardrobe, memory, skills, assistant, cards, widgets, screen };
 }
 
-test("tool-calling loop: remember tool then final answer", async () => {
+test("tool-calling loop streams the answer and sends only the relevant tools", async () => {
   const server = await fakeOllama({
     reply: (body) => {
       const last = body.messages.at(-1);
       if (last.role === "user") {
-        return { role: "assistant", content: "", tool_calls: [{ function: { name: "remember", arguments: { fact: "Dislikes yellow" } } }] };
+        return { role: "assistant", content: "", tool_calls: [{ function: { name: "memory", arguments: { action: "remember", fact: "Dislikes yellow" } } }] };
       }
       assert.equal(last.role, "tool");
-      assert.equal(last.tool_name, "remember");
-      return { role: "assistant", content: "**Noted** – no yellow for you! 🎨" };
+      assert.equal(last.tool_name, "memory");
+      return { role: "assistant", content: "**Noted**, no yellow for you from now on! 🎨 Anything else I can help with today?" };
     },
   });
   try {
     const { assistant, memory, skills } = build(server.url);
     await skills.init();
-    const reply = await assistant.ask("I really don't like yellow");
+    const sentences = [];
+    const reply = await assistant.ask("yellow clothes never suit me", { onSentence: (s) => sentences.push(s) });
 
-    assert.equal(reply, "Noted – no yellow for you!");
+    assert.equal(reply, "Noted, no yellow for you from now on! Anything else I can help with today?");
+    assert.deepEqual(sentences, ["Noted, no yellow for you from now on!", "Anything else I can help with today?"], "spoken as it streams");
     assert.deepEqual(memory.facts.map((f) => f.text), ["Dislikes yellow"]);
 
-    const chat = server.requests.find((r) => r.url === "/api/chat").body;
+    const chats = server.requests.filter((r) => r.url === "/api/chat").map((r) => r.body);
+    const chat = chats[0];
     assert.equal(chat.think, false, "think flag sent to thinking-capable model");
-    assert.equal(chat.stream, false);
-    assert.match(chat.messages[0].content, /You are Jarvis, a friendly voice assistant built into a smart mirror for Sam/);
+    assert.equal(chat.stream, true);
+    assert.match(chat.messages[0].content, /You are Jarvis, a friendly voice assistant in a smart mirror for Sam/);
+    assert.doesNotMatch(chat.messages[0].content, /\d:\d\d/, "no clock time in the system prompt (it would defeat the prompt cache)");
+    assert.match(chat.messages.at(-1).content, /^\[[^\]]*\d{1,2}:\d\d[^\]]*\]\n\nyellow clothes never suit me$/, "per-request context rides on the user message");
     const toolNames = chat.tools.map((t) => t.function.name);
-    assert.ok(toolNames.includes("suggest_outfit"));
+    assert.deepEqual(toolNames, ["suggest_outfit", "wardrobe", "memory"], "only tools the request points to");
     assert.ok(!toolNames.includes("look_at_user"), "vision tools hidden without a camera");
-    assert.ok(!toolNames.includes("web_search"), "search hidden when not configured");
 
-    // History is kept for follow-ups, without tool messages leaking out of order.
-    assert.equal(assistant.history[0].role, "user");
-    assert.equal(assistant.history.at(-1).content, "Noted – no yellow for you!");
+    // History keeps messages exactly as sent, so the next prompt extends this one.
+    assert.equal(assistant.history[0].content, chat.messages.at(-1).content);
+    assert.equal(assistant.history.at(-1).content, reply);
+
+    // A follow-up keeps the tools of the previous exchange ("…and forget it again").
+    await assistant.ask("thanks");
+    const followUp = server.requests.filter((r) => r.url === "/api/chat").at(-1).body;
+    assert.deepEqual(followUp.tools.map((t) => t.function.name), ["memory"]);
+    assert.match(followUp.messages[0].content, /About the user:\n- Dislikes yellow/);
+  } finally {
+    await server.close();
+  }
+});
+
+test("consecutive questions extend the previous prompt (cache reuse)", async () => {
+  const server = await fakeOllama({ reply: () => ({ role: "assistant", content: "Why did the mirror blush? It saw your reflection." }) });
+  try {
+    const { assistant } = build(server.url);
+    await assistant.ask("tell me a joke");
+    await assistant.ask("another one");
+    const [first, second] = server.requests.filter((r) => r.url === "/api/chat").map((r) => r.body.messages);
+    assert.deepEqual(second.slice(0, first.length), first, "second prompt starts with the whole first prompt");
+    assert.equal(second.length, first.length + 2);
+  } finally {
+    await server.close();
+  }
+});
+
+test("plain questions are sent without tools; style statements are remembered instantly", async () => {
+  const server = await fakeOllama({ reply: () => ({ role: "assistant", content: "Octopuses have three hearts and blue blood." }) });
+  try {
+    const { assistant, memory } = build(server.url);
+    assert.equal(await assistant.ask("give me a fun fact about octopuses"), "Octopuses have three hearts and blue blood.");
+    const chat = server.requests.find((r) => r.url === "/api/chat").body;
+    assert.equal("tools" in chat, false, "no tool list for a plain question");
+    assert.match(chat.messages[0].content, /Answer from your own knowledge/);
+
+    const before = server.requests.length;
+    assert.equal(await assistant.ask("I really don't like wearing orange"), "Got it, I'll remember that.");
+    assert.equal(server.requests.length, before, "no LLM call");
+    assert.deepEqual(memory.facts.map((f) => f.text), ["the user really doesn't like wearing orange"]);
   } finally {
     await server.close();
   }
@@ -127,7 +183,7 @@ test("models without thinking/tools get neither field", async () => {
   }
 });
 
-test("outfit fast path uses structured output, validates ids and shows a card", async () => {
+test("AI outfit stylist uses structured output, validates ids and shows a card", async () => {
   let wardrobeRef;
   const server = await fakeOllama({
     reply: (body) => {
@@ -136,18 +192,18 @@ test("outfit fast path uses structured output, validates ids and shows a card", 
       const coat = wardrobeRef.items.find((i) => i.category === "outerwear");
       return {
         role: "assistant",
-        content: JSON.stringify({ title: "Rainy day layers", item_ids: [coat.id, "w-invented"], spoken: "Wear your grey coat, it's wet out." }),
+        content: JSON.stringify({ title: "Rainy day layers", item_ids: [coat.id, "w-invented"], reason: "it keeps the rain off" }),
       };
     },
   });
   try {
-    const { assistant, wardrobe, skills, cards } = build(server.url);
+    const { assistant, wardrobe, skills, cards } = build(server.url, { outfitPlanner: "ai" });
     wardrobeRef = wardrobe;
     wardrobe.add({ name: "Grey wool coat", category: "outerwear", colors: ["grey"], warmth: 5 });
     wardrobe.add({ name: "White tee", category: "top", colors: ["white"], warmth: 1 });
 
     const reply = await assistant.ask("What should I wear today?");
-    assert.equal(reply, "Wear your grey coat, it's wet out.");
+    assert.equal(reply, "How about your grey wool coat? It keeps the rain off.");
     assert.equal(cards.length, 1);
     assert.equal(cards[0].type, "outfit");
     assert.deepEqual(cards[0].items.map((i) => i.name), ["Grey wool coat"]);
@@ -221,19 +277,20 @@ test("outfit card includes pieces the model names aloud but omits from item_ids"
       const shirt = wardrobeRef.items.find((i) => i.category === "top");
       return {
         role: "assistant",
-        content: JSON.stringify({ title: "Sunny layers", item_ids: [shirt.id], spoken: "Wear the navy oxford shirt, and add your red wool cap for style." }),
+        content: JSON.stringify({ title: "Sunny layers", item_ids: [shirt.id], reason: "Add the red wool cap for a pop of colour" }),
       };
     },
   });
   try {
-    const { assistant, wardrobe, cards } = build(server.url);
+    const { assistant, wardrobe, cards } = build(server.url, { outfitPlanner: "ai" });
     wardrobeRef = wardrobe;
     wardrobe.add({ name: "Navy oxford shirt", category: "top", colors: ["navy"] });
     wardrobe.add({ name: "Red wool cap", category: "accessory", colors: ["red"] });
     wardrobe.add({ name: "Grey hoodie", category: "top", colors: ["grey"] });
 
-    await assistant.ask("what should I wear?");
+    const reply = await assistant.ask("what should I wear?");
     assert.deepEqual(cards.at(-1).items.map((i) => i.name), ["Navy oxford shirt", "Red wool cap"]);
+    assert.equal(reply, "How about your navy oxford shirt and your red wool cap? Add the red wool cap for a pop of colour.");
   } finally {
     await server.close();
   }
@@ -250,7 +307,9 @@ test("explicit 'on the mirror' requests build a panel with structured output", a
   });
   try {
     const { assistant, widgets } = build(server.url);
-    assert.equal(await assistant.ask("put a packing list for the beach on the mirror"), "Here's your beach list.");
+    const said = [];
+    assert.equal(await assistant.ask("put a packing list for the beach on the mirror", { onSentence: (x) => said.push(x) }), "Here's your beach list.");
+    assert.deepEqual(said, ["Sure, putting that on the mirror.", "Here's your beach list."], "acknowledged right away");
     assert.deepEqual(widgets.list("info")[0].data, { title: "Beach day", subtitle: "", lines: ["Sunscreen", "Towel", "Water"] });
 
     reply = { title: "", lines: [], spoken: "" };
@@ -268,6 +327,31 @@ test("custom voice commands send notifications without the LLM", async () => {
     screen.on("notify", (n) => sent.push(n));
     assert.equal(await assistant.ask("Next page please"), "Next page.");
     assert.deepEqual(sent, [{ notification: "PAGE_INCREMENT", payload: null }]);
+  } finally {
+    await server.close();
+  }
+});
+
+test("fast outfit planner and weather answers need no language model", async () => {
+  const server = await fakeOllama({ reply: () => assert.fail("LLM must not be called") });
+  try {
+    const { assistant, wardrobe, cards, skills } = build(server.url);
+    wardrobe.add({ name: "Grey hoodie", category: "top", colors: ["grey"], warmth: 3 });
+    wardrobe.add({ name: "White tee", category: "top", colors: ["white"], warmth: 1 });
+    wardrobe.add({ name: "Dark jeans", category: "bottom", colors: ["blue"], warmth: 3 });
+    wardrobe.add({ name: "Khaki shorts", category: "bottom", colors: ["khaki"], warmth: 1 });
+    wardrobe.add({ name: "Black rain jacket", category: "outerwear", colors: ["black"], warmth: 3 });
+    wardrobe.add({ name: "Tan sandals", category: "shoes", colors: ["tan"], warmth: 1 });
+    wardrobe.add({ name: "Brown leather boots", category: "shoes", colors: ["brown"], warmth: 3 });
+
+    // build() reports 4°C and rain from the mirror's weather module.
+    const reply = await assistant.ask("what should I wear today?");
+    assert.deepEqual(cards.at(-1).items.map((i) => i.name), ["Grey hoodie", "Dark jeans", "Brown leather boots", "Black rain jacket"]);
+    assert.equal(reply, "It's 4 degrees and wet, so I'd go with your grey hoodie, your dark jeans and your brown leather boots. Add your black rain jacket for the rain.");
+    assert.equal(skills.lastSuggestion.itemIds.length, 4);
+
+    assert.equal(await assistant.ask("how cold is it?"), "It's 4 degrees now, with a high of 6 degrees and a low of 1 degree. Bring a warm coat.");
+    assert.equal(await assistant.ask("will it rain today?"), "Yes, expect rain today.");
   } finally {
     await server.close();
   }

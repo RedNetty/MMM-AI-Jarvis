@@ -12,8 +12,9 @@
 # and Debian/Ubuntu x86_64. Re-running is safe; finished steps are skipped.
 #
 # Usage: scripts/setup-pi.sh [options]
-#   --model NAME          Ollama model (default: qwen3.5:4b, or qwen3.5:2b on <6 GB RAM)
-#   --whisper-model NAME  whisper.cpp model (default: base.en; use "base" or "small" for non-English)
+#   --model NAME          Ollama model (default: qwen3.5:2b, the fastest; qwen3.5:4b is smarter but slower)
+#   --whisper-model NAME  whisper.cpp model (default: tiny.en, the fastest; base.en for noisy rooms;
+#                         "tiny" or "base" for languages other than English)
 #   --voice NAME          Piper voice (default: en_GB-alan-medium)
 #   --whisper-port PORT   Port for the whisper server (default: 8178)
 #   --piper-port PORT     Port for the Piper voice server (default: 5005)
@@ -24,8 +25,8 @@
 
 set -euo pipefail
 
-MODEL=""
-WHISPER_MODEL="base.en"
+MODEL="qwen3.5:2b"
+WHISPER_MODEL="tiny.en"
 VOICE="en_GB-alan-medium"
 WHISPER_PORT=8178
 PIPER_PORT=5005
@@ -104,8 +105,8 @@ case "$ARCH" in
 esac
 
 MEM_GB=$(awk '/MemTotal/ { printf "%d", $2 / 1024 / 1024 + 0.5 }' /proc/meminfo)
-if [[ -z "$MODEL" ]]; then
-  if (( MEM_GB < 6 )); then MODEL="qwen3.5:2b"; else MODEL="qwen3.5:4b"; fi
+if [[ "$MODEL" == *4b* || "$MODEL" == *9b* ]] && (( MEM_GB < 6 )); then
+  warn "${MODEL} needs more RAM than this device has (${MEM_GB} GB). Consider --model qwen3.5:2b."
 fi
 THREADS=$(nproc)
 

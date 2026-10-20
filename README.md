@@ -12,6 +12,8 @@ images never leave the house.
 
 <p align="center"><img src="docs/screenshot.png" width="440" alt="Jarvis on a MagicMirror showing an outfit suggestion, a live Premier League score and a pasta timer"></p>
 
+<p align="center"><a href="docs/ui-gallery.png">All states and cards</a> · <a href="docs/mirror-real.png">A full mirror after real requests</a></p>
+
 ---
 
 ## Contents
@@ -66,44 +68,63 @@ images never leave the house.
 
 - **Voice activity detection** cuts the microphone stream into sentences locally, so the speech
   recogniser only runs when someone is talking. It adapts to room noise and ignores fans and hums.
-- **Fast intents** handle the most common requests (scores, timers, outfits, camera, screen
-  control, memory, "put … on the mirror") directly or with a single structured model call. Small
-  local models sometimes pick the wrong tool or claim they did something they didn't, so the
+- **Fast intents** handle the most common requests (scores, timers, weather, outfits, camera,
+  screen control, memory, "put … on the mirror") directly or with a single structured model call.
+  Small local models sometimes pick the wrong tool or claim they did something they didn't, so the
   important paths don't depend on free tool choice. Everything else goes to the LLM, which can
   call the same tools.
 - **Live cards** (scores, timers, outfits, info panels) are managed on the server and refresh on
   their own. A live game updates every 20 seconds, and the score animates when someone scores.
 
+### Built for speed on a Raspberry Pi
+
+A Pi has no GPU, so every token the language model reads or writes costs time. Jarvis is designed
+around that, and each choice below was measured:
+
+- **Most requests never touch the language model.** Scores, timers, weather questions, screen
+  control, preferences and **outfit picks** are handled by fast intents and a rule-based outfit
+  planner, which answer in milliseconds.
+- **Small prompts.** Each request carries only the tools its words point to ("set a timer" sends one
+  tool, "tell me a joke" none), cutting a plain question's prompt from ~2,500 to ~100–200 tokens.
+- **Streaming speech.** Jarvis starts talking as soon as the first sentence is written, and the next
+  sentence is synthesised while the current one plays.
+- **Instant acknowledgement.** Slower requests (panels, the camera) say "Sure…" straight away.
+- **Fast defaults.** `qwen3.5:2b` (about 35% faster than 4b), whisper `tiny.en` (2.3× faster than
+  `base.en` with the same accuracy in testing), the Piper voice kept loaded as a service (10–25×
+  faster than starting it per sentence), and the model kept in memory (`keepAlive: -1`).
+
 ## Hardware
 
 | Setup | Model | Notes |
 |---|---|---|
-| **Raspberry Pi 5, 8 GB** (recommended) | `qwen3.5:4b` | Everything on the mirror. Use active cooling: the LLM keeps all cores busy while it thinks |
-| Raspberry Pi 5, 4 GB | `qwen3.5:2b` | Works; answers are a little less clever |
-| Raspberry Pi 4, 8 GB | `qwen3.5:2b` | Usable, but noticeably slower for LLM answers |
+| **Raspberry Pi 5, 8 GB** (recommended) | `qwen3.5:2b` | Everything on the mirror. Use active cooling: the LLM keeps all cores busy while it thinks |
+| Raspberry Pi 5, 4 GB | `qwen3.5:2b` | Fits comfortably (~2.7 GB for the model) |
+| Raspberry Pi 4, 8 GB | `qwen3.5:2b` | Usable, but noticeably slower for open questions |
 | Pi + a PC/Mac on your network | `qwen3.5:9b` or larger | Fastest and smartest. See [Running the model on another computer](#running-the-model-on-another-computer) |
 
-`qwen3.5:2b` is the smallest model recommended. In testing, `qwen3.5:0.8b` sometimes claimed to have
-done things (like saving a preference) without actually calling the tool.
+`qwen3.5:4b` gives somewhat better answers but generated about 35% slower in testing. `qwen3.5:2b`
+is also the smallest recommended: `qwen3.5:0.8b` sometimes claimed to have done things (like saving
+a preference) without actually calling the tool.
 
-**What to expect.** These timings were measured end to end inside MagicMirror 2.38 on a 4-core x86
-test VM with **no GPU**, running `qwen3.5:2b`. A Raspberry Pi 5 will be slower; a PC with a GPU is
-much faster.
+**What to expect.** Measured end to end inside MagicMirror 2.38 on a 4-core x86 test VM with
+**no GPU**, running `qwen3.5:2b`. These are **not Raspberry Pi measurements**: a Pi 5 will be
+slower for anything that uses the language model; a PC with a GPU is much faster. Times are from
+the end of your sentence, after speech recognition (whisper `tiny.en`: ~0.7 s).
 
-| Request | Path | Time |
+| Request | How it's answered | Time |
 |---|---|---|
-| Speech recognition (whisper.cpp `base.en`, short command) | – | ~1.3 s |
-| Voice (Piper server, per sentence) | – | 0.1–0.4 s |
-| "What's the score of the Pistons game?" / timers / "hide the news" | fast intent | ~0.2 s |
-| "Put a packing list for the beach on the mirror" | structured panel | ~14 s |
-| "What should I wear today?" | outfit planner | ~15–17 s |
-| Open questions ("a good stretch for a stiff neck?") | LLM + tools | ~35–45 s |
-| "How do I look?" | vision | ~35 s |
-| "Add these clothes to my wardrobe" (3 items, 960×720 photo) | vision + cataloguing | ~60 s |
+| "What should I wear today?" | rule-based planner | **instant** (~0.01 s) |
+| "Will I need an umbrella tomorrow?" | from the forecast | **instant** |
+| "Set a pasta timer for 10 minutes" / "hide the news" / "I hate wearing orange" | fast intent | **instant** |
+| "What's the score of the Pistons game?" | ESPN feed | ~0.2 s |
+| Open questions ("a fun fact about octopuses") | LLM, streamed | first words in **~3.5–6 s** |
+| "Put a packing list for the beach on the mirror" | structured panel | instant "Sure…", panel in ~9–14 s |
+| "How do I look?" | vision | instant "Let me take a look", answer in up to ~35 s |
+| "Add these clothes to my wardrobe" (3 items) | vision + cataloguing | instant acknowledgement, up to ~60 s |
 
-If you want snappier answers, [offloading the model](#running-the-model-on-another-computer) to a
-faster machine makes the biggest difference. Scores, timers and screen control stay instant either
-way.
+The Piper voice adds 0.1–0.4 s per sentence. For faster open questions and camera features,
+[offload the model](#running-the-model-on-another-computer) to a faster machine. Everything in
+the "instant" rows stays instant either way.
 
 You'll also need:
 
@@ -138,9 +159,10 @@ It takes a while on first run (it compiles whisper.cpp and downloads a few GB of
 it plays a test phrase and prints the config block to paste. Options:
 
 ```bash
-scripts/setup-pi.sh --model qwen3.5:2b        # pick a different model
+scripts/setup-pi.sh --model qwen3.5:4b        # smarter, slower model
 scripts/setup-pi.sh --voice en_US-lessac-medium  # pick a different voice (listen at https://rhasspy.github.io/piper-samples/)
-scripts/setup-pi.sh --whisper-model base      # multilingual speech recognition (base.en is English-only)
+scripts/setup-pi.sh --whisper-model base.en   # more robust speech recognition in noisy rooms (slower)
+scripts/setup-pi.sh --whisper-model tiny      # languages other than English (tiny.en is English-only)
 scripts/setup-pi.sh --no-ollama               # if the model runs on another computer
 ```
 
@@ -153,14 +175,14 @@ sudo apt install alsa-utils espeak-ng fswebcam curl zstd git cmake build-essenti
 
 # Ollama + model
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull qwen3.5:4b
+ollama pull qwen3.5:2b
 
 # whisper.cpp server on port 8178 (MagicMirror already uses 8080)
 git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git ~/.local/share/jarvis/whisper.cpp
 cd ~/.local/share/jarvis/whisper.cpp
 cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target whisper-server
-bash models/download-ggml-model.sh base.en
-./build/bin/whisper-server -m models/ggml-base.en.bin --host 127.0.0.1 --port 8178
+bash models/download-ggml-model.sh tiny.en
+./build/bin/whisper-server -m models/ggml-tiny.en.bin --host 127.0.0.1 --port 8178
 
 # Piper voice server on port 5005
 python3 -m venv ~/.local/share/jarvis/piper-venv
@@ -185,7 +207,7 @@ In `~/MagicMirror/config/config.js`:
   position: "lower_third",
   config: {
     userName: "Alex",
-    llm: { model: "qwen3.5:4b" },
+    llm: { model: "qwen3.5:2b" },
   },
 },
 ```
@@ -307,12 +329,13 @@ If Piper isn't reachable at all, Jarvis falls back to espeak-ng and says so on t
 | Option | Default | Description |
 |---|---|---|
 | `ollamaUrl` | `"http://127.0.0.1:11434"` | Ollama server (can be another computer) |
-| `model` | `"qwen3.5:4b"` | Any Ollama model. Use one with *tools* and *vision* for all features |
+| `model` | `"qwen3.5:2b"` | Any Ollama model. Use one with *tools* and *vision* for all features |
 | `visionModel` | `""` | Separate model for camera images (empty = `model`) |
-| `keepAlive` | `"30m"` | How long the model stays loaded (`-1` = forever) |
-| `temperature` / `maxTokens` / `contextSize` | `0.6` / `400` / `8192` | Generation settings |
+| `keepAlive` | `-1` | How long the model stays loaded (`-1` = forever; reloading from an SD card is slow) |
+| `temperature` / `maxTokens` / `contextSize` | `0.4` / `160` / `4096` | Generation settings (short spoken replies are faster) |
 | `think` | `false` | Let "thinking" models reason first (smarter, slower) |
 | `fastIntents` | `true` | Handle common requests without the LLM |
+| `outfitPlanner` | `"fast"` | `"fast"`: instant rule-based picks · `"ai"`: the language model chooses (richer reasons, much slower on a Pi) |
 </details>
 
 <details>
@@ -324,7 +347,7 @@ If Piper isn't reachable at all, Jarvis falls back to espeak-ng and says so on t
 | `speakerDevice` | `"default"` | ALSA playback device (`aplay -L`) |
 | `vadThreshold` | `500` | Minimum loudness counted as speech; raise it if noise triggers Jarvis |
 | `noiseMultiplier` | `3` | Speech must be this many times louder than the room |
-| `silenceMs` | `900` | Pause that ends a sentence |
+| `silenceMs` | `750` | Pause that ends a sentence (lower is snappier but may cut off slow talkers) |
 | `preRollMs` / `minUtteranceMs` / `maxUtteranceMs` | `400` / `350` / `15000` | Utterance shaping |
 | `allowBargeIn` | `true` | Listen while speaking so "stop" works; set `false` if Jarvis hears itself |
 | `chime` / `chimeVolume` | `true` / `0.25` | Tone when you say just the wake word |
@@ -438,7 +461,7 @@ Example: show a daily outfit at 7:30 with [MMM-ModuleScheduler](https://github.c
 | Wake word misheard | Add the mis-hearing to `wakeWordAliases` (turn on `debug` to see transcripts) |
 | "Camera … no capture tool found" | Pi camera: `rpicam-still --list-cameras`. USB: `sudo apt install fswebcam` |
 | Outfits ignore the weather | Add MagicMirror's `weather` module or set `weather.latitude/longitude` |
-| Slow answers | Use a smaller model, keep `fastIntents: true`, or run the model on another computer |
+| Slow answers | Keep `fastIntents: true` and `outfitPlanner: "fast"`, use `qwen3.5:2b`, or run the model on another computer. Turn on `debug` to see prompt and generation times for every request |
 
 ## Upgrading from v2
 
@@ -468,15 +491,17 @@ MMM-AI-Jarvis/
 │   ├── intents.js          # Deterministic routing for common requests
 │   ├── tools.js            # Tool definitions exposed to the LLM
 │   ├── Skills.js           # Everything Jarvis can do (vision, outfits, scores, timers, screen…)
+│   ├── OutfitPlanner.js    # Instant rule-based outfit picks (weather, occasion, likes, recent wear)
 │   ├── Widgets.js          # Live cards with expiry and self-refresh
 │   ├── Screen.js           # Knows and controls other modules on the mirror
 │   ├── Sports.js           # ESPN public scoreboards
 │   ├── Ollama.js           # Local LLM client (capability-aware)
 │   ├── Wardrobe.js, Memory.js, JsonStore.js
 │   ├── Weather.js, Camera.js, WebSearch.js
-│   ├── audio/              # Microphone, voice activity detector, speaker, WAV/chime
+│   ├── audio/              # Microphone, voice activity detector, speech queue, speaker, WAV/chime
 │   ├── stt/                # whisper.cpp client
 │   └── tts/                # Piper (server + CLI) and espeak-ng
+├── docs/                   # Screenshots
 ├── scripts/setup-pi.sh     # Installs the local AI stack
 ├── config/config.js.sample
 └── test/

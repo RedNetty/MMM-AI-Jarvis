@@ -205,7 +205,9 @@ test("Intents for display, timers and memory", () => {
   assert.deepEqual(intent("close that"), { name: "hide_on_mirror", args: { target: "everything" } });
   assert.deepEqual(intent("show the calendar"), { name: "show_module", args: { target: "calendar" } });
   assert.deepEqual(intent("show me a recipe for pancakes"), { name: "compose_panel", args: { request: "show me a recipe for pancakes" } });
-  assert.equal(intent("show the weather"), null, "modules that aren't on this mirror go to the LLM");
+  assert.equal(intent("show the traffic"), null, "modules that aren't on this mirror go to the LLM");
+  assert.deepEqual(intent("will I need an umbrella tomorrow?"), { name: "weather_answer", args: { question: "will I need an umbrella tomorrow?" } });
+  assert.equal(intent("what should I wear for this weather")?.name, "suggest_outfit", "outfit beats weather");
   assert.deepEqual(intent("bring back everything"), { name: "show_module", args: { target: "everything" } });
   assert.deepEqual(intent("focus mode"), { name: "focus_mode", args: {} });
   assert.deepEqual(intent("great, I'll wear that"), { name: "log_outfit_worn", args: {} });

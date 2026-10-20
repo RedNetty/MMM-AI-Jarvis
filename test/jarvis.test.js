@@ -32,7 +32,8 @@ function buildJarvis({ followUpWindow = 0, allowBargeIn = true, answerDelay = 0 
   jarvis.chimeWav = null;
   jarvis.vad = { pause() {}, resume() {} };
   jarvis.assistant = {
-    ask: async (q, { signal }) => {
+    // Like the real Assistant: streams each sentence to onSentence, then returns the full reply.
+    ask: async (q, { signal, onSentence }) => {
       asked.push(q);
       await new Promise((resolve, reject) => {
         const t = setTimeout(resolve, answerDelay);
@@ -41,7 +42,9 @@ function buildJarvis({ followUpWindow = 0, allowBargeIn = true, answerDelay = 0 
           reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
         });
       });
-      return `Answer to ${q}. Second sentence.`;
+      const sentences = [`Answer to ${q}.`, "Second sentence."];
+      for (const sentence of sentences) onSentence(sentence);
+      return sentences.join(" ");
     },
   };
   jarvis.tts = { synthesize: async (text) => Buffer.from(text) };
@@ -71,6 +74,7 @@ test("wake word with a question is answered and spoken sentence by sentence", as
     [
       "transcription:what time is it?",
       "state:processing",
+      "response:Answer to what time is it?.",
       "response:Answer to what time is it?. Second sentence.",
       "state:speaking",
       "state:idle",

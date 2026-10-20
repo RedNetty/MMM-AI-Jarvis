@@ -113,3 +113,67 @@ test("Whisper output cleaning removes non-speech and hallucinations", () => {
   assert.equal(WhisperCppSTT.clean("(music) Thank you."), "");
   assert.equal(WhisperCppSTT.clean(" Jarvis, what time is it? [ Silence ]"), "Jarvis, what time is it?");
 });
+
+const SpeechQueue = require("../lib/audio/SpeechQueue");
+
+test("SpeechQueue plays streamed sentences in order, synthesising one ahead", async () => {
+  const log = [];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const controller = new AbortController();
+  const queue = new SpeechQueue({
+    signal: controller.signal,
+    synthesize: async (text) => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      log.push(`synth:${text}`);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return Buffer.from(text);
+    },
+    play: async (wav) => {
+      log.push(`play:${wav}`);
+      await new Promise((r) => setTimeout(r, 15));
+      return { interrupted: false };
+    },
+    onStart: () => log.push("start"),
+  });
+
+  queue.push("one");
+  await new Promise((r) => setTimeout(r, 2));
+  queue.push("two"); // arrives while "one" is being prepared – like streamed LLM output
+  queue.push("three");
+  await queue.finish();
+
+  assert.deepEqual(log.filter((l) => l.startsWith("play")), ["play:one", "play:two", "play:three"]);
+  assert.equal(log.indexOf("start"), log.indexOf("play:one") - 1);
+  assert.ok(maxInFlight <= 1, "never synthesises more than one sentence ahead");
+});
+
+test("SpeechQueue stops on abort and reports synthesis errors", async () => {
+  const controller = new AbortController();
+  const played = [];
+  const queue = new SpeechQueue({
+    signal: controller.signal,
+    synthesize: async (t) => Buffer.from(t),
+    play: async (wav) => {
+      played.push(String(wav));
+      controller.abort();
+      return { interrupted: true };
+    },
+  });
+  queue.push("first");
+  queue.push("second");
+  await queue.finish();
+  assert.deepEqual(played, ["first"]);
+
+  const failing = new SpeechQueue({
+    signal: new AbortController().signal,
+    synthesize: async () => {
+      throw new Error("tts down");
+    },
+    play: async () => ({ interrupted: false }),
+  });
+  failing.push("hello");
+  await assert.rejects(failing.finish(), /tts down/);
+});

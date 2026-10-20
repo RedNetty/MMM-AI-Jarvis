@@ -33,14 +33,15 @@ Module.register("MMM-AI-Jarvis", {
 
     llm: {
       ollamaUrl: "http://127.0.0.1:11434",
-      model: "qwen3.5:4b",
+      model: "qwen3.5:2b", // fastest recommended; "qwen3.5:4b" is smarter but ~35% slower
       visionModel: "", // empty = same as model
-      keepAlive: "30m",
-      temperature: 0.6,
-      maxTokens: 400,
-      contextSize: 8192,
+      keepAlive: -1,      // keep the model loaded; reloading from an SD card is slow
+      temperature: 0.4,
+      maxTokens: 160,     // spoken replies are short; fewer tokens = faster on a Pi
+      contextSize: 4096,
       think: false,
       fastIntents: true,
+      outfitPlanner: "fast", // "fast" = instant rule-based picks; "ai" = the language model chooses (slower on a Pi)
     },
 
     audio: {
@@ -48,7 +49,7 @@ Module.register("MMM-AI-Jarvis", {
       speakerDevice: "default",
       vadThreshold: 500,
       noiseMultiplier: 3,
-      silenceMs: 900,
+      silenceMs: 750,
       preRollMs: 400,
       minUtteranceMs: 350,
       maxUtteranceMs: 15000,
@@ -232,24 +233,35 @@ Module.register("MMM-AI-Jarvis", {
     this.dialogEl.classList.remove("is-cleared");
     this.userEl.textContent = text;
     this.replyEl.replaceChildren();
+    this.replyText = "";
     this._restartAnimation(this.userEl, "jv-in");
   },
 
+  /**
+   * Show the reply. Replies stream in sentence by sentence; when the new text
+   * continues the previous one, only the new words are animated in.
+   */
   _showReply(text) {
     if (!this.config.display.showResponse) return;
     clearTimeout(this.timers.clear);
     this.dialogEl.classList.remove("is-cleared");
 
-    // Reveal word by word; the total reveal is capped at ~1.4s.
-    const words = String(text).split(/\s+/).filter(Boolean);
-    const step = Math.min(45, 1400 / Math.max(words.length, 1));
+    const previous = this.replyText ?? "";
+    const continues = previous && text.startsWith(previous);
+    const fresh = continues ? text.slice(previous.length) : text;
+    if (!continues) this.replyEl.replaceChildren();
+    this.replyText = text;
+
+    // Reveal word by word; each reveal is capped at ~1.2s.
+    const words = fresh.split(/\s+/).filter(Boolean);
+    const step = Math.min(45, 1200 / Math.max(words.length, 1));
     const frag = document.createDocumentFragment();
     words.forEach((word, i) => {
       const span = this._el("span", "jv-word", word);
       span.style.animationDelay = `${Math.round(i * step)}ms`;
       frag.append(span, " ");
     });
-    this.replyEl.replaceChildren(frag);
+    this.replyEl.appendChild(frag);
   },
 
   _scheduleClear() {
