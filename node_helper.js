@@ -1,19 +1,19 @@
 "use strict";
 
 /* MagicMirror² Node Helper: MMM-AI-Jarvis
- * Bridges the mirror front-end and the on-device assistant engine (lib/Jarvis.js).
+ * Bridges the mirror front-end and the on-device assistant engine (lib/Iris.js).
  */
 
 const NodeHelper = require("node_helper");
 const path = require("path");
-const Jarvis = require("./lib/Jarvis");
+const Iris = require("./lib/Iris");
 const log = require("./lib/log");
 
 const PHOTO_NAME = /^[\w.-]+\.jpg$/;
 
 module.exports = NodeHelper.create({
   start() {
-    this.jarvis = null;
+    this.iris = null;
     this.photoDir = null;
     this.problems = [];
     this._registerPhotoRoute();
@@ -21,7 +21,7 @@ module.exports = NodeHelper.create({
   },
 
   stop() {
-    this.jarvis?.stop();
+    this.iris?.stop();
   },
 
   socketNotificationReceived(notification, payload) {
@@ -30,19 +30,19 @@ module.exports = NodeHelper.create({
         this._init(payload);
         break;
       case "ASK":
-        this.jarvis?.ask(payload);
+        this.iris?.ask(payload);
         break;
       case "STOP":
-        this.jarvis?.cancel();
+        this.iris?.cancel();
         break;
       case "WEATHER":
-        this.jarvis?.updateWeather(payload);
+        this.iris?.updateWeather(payload);
         break;
       case "MODULES":
-        this.jarvis?.updateModules(payload);
+        this.iris?.updateModules(payload);
         break;
       case "DISMISS_WIDGET":
-        this.jarvis?.dismissWidget(payload);
+        this.iris?.dismissWidget(payload);
         break;
       default:
         break;
@@ -52,15 +52,15 @@ module.exports = NodeHelper.create({
   _init(config) {
     // Every browser window (and every page reload) sends INIT. Only the first
     // one starts the engine; later ones just receive the current state.
-    if (this.jarvis) {
-      this.jarvis.replayState();
+    if (this.iris) {
+      this.iris.replayState();
       this.sendSocketNotification("PROBLEMS", this.problems);
       return;
     }
 
     try {
-      this.jarvis = new Jarvis(config, { moduleDir: this.path });
-      this.photoDir = path.join(this.jarvis.dataDir, "photos");
+      this.iris = new Iris(config, { moduleDir: this.path });
+      this.photoDir = path.join(this.iris.dataDir, "photos");
 
       const forward = {
         state: "STATE",
@@ -72,17 +72,17 @@ module.exports = NodeHelper.create({
         error: "ERROR",
       };
       for (const [event, notification] of Object.entries(forward)) {
-        this.jarvis.on(event, (payload) => this.sendSocketNotification(notification, payload));
+        this.iris.on(event, (payload) => this.sendSocketNotification(notification, payload));
       }
-      this.jarvis.on("problems", (p) => {
+      this.iris.on("problems", (p) => {
         this.problems = p;
         this.sendSocketNotification("PROBLEMS", p);
       });
 
-      this.jarvis.start();
+      this.iris.start();
     } catch (err) {
       log.error(`Failed to start: ${err.stack ?? err.message}`);
-      this.jarvis = null;
+      this.iris = null;
       this.sendSocketNotification("PROBLEMS", [err.message]);
     }
   },

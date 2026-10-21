@@ -342,6 +342,92 @@
   letter-spacing: 0.04em;
 }
 
+/* ── Scoreboard (several games) ─────────────────────────────────────── */
+
+.jv-card--scoreboard.is-live { border-color: rgba(255, 77, 94, 0.3); }
+.jv-card--scoreboard.is-live .jv-card-meta { color: var(--jv-live); }
+
+.jv-board { display: grid; gap: 0.15rem; }
+
+.jv-board-league {
+  margin-top: 0.45rem;
+  font-family: var(--jv-condensed);
+  font-size: 0.55rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--jv-fg-3);
+}
+
+.jv-board-league:first-child { margin-top: 0; }
+
+.jv-board-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.2rem minmax(0, 1fr) 5.4rem;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 1.75rem;
+}
+
+.jv-board-team {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+
+.jv-board-team.is-home { justify-content: flex-end; }
+
+.jv-board-logo {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: none;
+  object-fit: contain;
+}
+
+.jv-board-logo.is-missing { visibility: hidden; }
+
+.jv-board-abbr {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  letter-spacing: 0.04em;
+}
+
+.jv-board-score {
+  display: flex;
+  justify-content: center;
+  gap: 0.3rem;
+  font-size: 1.05rem;
+  font-weight: 200;
+  font-variant-numeric: tabular-nums;
+  color: var(--jv-fg-2);
+}
+
+.jv-board-score .is-ahead { color: var(--jv-fg); font-weight: 400; }
+.jv-board-score.jv-flash { animation: jv-flash 1.6s var(--jv-ease); }
+.jv-board-dash { color: var(--jv-fg-4); }
+
+.jv-board-score.is-time {
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--jv-fg-3);
+}
+
+.jv-board-status {
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-align: right;
+  color: var(--jv-fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jv-board-row.is-in .jv-board-status { color: var(--jv-live); }
+.jv-board-row.is-post { opacity: 0.6; }
+
 /* ── Timer ──────────────────────────────────────────────────────────── */
 
 .jv-timer {
