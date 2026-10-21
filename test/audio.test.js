@@ -150,6 +150,54 @@ test("SpeechQueue plays streamed sentences in order, synthesising one ahead", as
   assert.ok(maxInFlight <= 1, "never synthesises more than one sentence ahead");
 });
 
+test("SpeechQueue speaks the first sentence alone, then waiting sentences together", async () => {
+  const synthesized = [];
+  const played = [];
+  const queue = new SpeechQueue({
+    signal: new AbortController().signal,
+    mergeChars: 40,
+    synthesize: async (text) => {
+      synthesized.push(text);
+      return Buffer.from(text);
+    },
+    play: async (wav) => {
+      played.push(String(wav));
+      await new Promise((r) => setTimeout(r, 5));
+      return { interrupted: false };
+    },
+  });
+  for (const s of ["Sure.", "It is sunny.", "High of 70.", "Low of 55 tonight.", "Enjoy it."]) queue.push(s);
+  await queue.finish();
+
+  assert.equal(synthesized[0], "Sure.", "the opening sentence is never held back");
+  assert.deepEqual(synthesized.slice(1), ["It is sunny. High of 70.", "Low of 55 tonight. Enjoy it."]);
+  assert.deepEqual(played, synthesized);
+});
+
+test("SpeechQueue prepares a sentence that streams in during playback right away", async () => {
+  const events = [];
+  let releasePlay;
+  const queue = new SpeechQueue({
+    signal: new AbortController().signal,
+    synthesize: async (text) => {
+      events.push(`synth:${text}`);
+      return Buffer.from(text);
+    },
+    play: async (wav) => {
+      events.push(`play:${wav}`);
+      if (String(wav) === "one") await new Promise((r) => (releasePlay = r));
+      return { interrupted: false };
+    },
+  });
+  queue.push("one");
+  await new Promise((r) => setTimeout(r, 5));
+  queue.push("two"); // the model finished its next sentence while "one" plays
+  assert.equal(events.at(-1), "synth:two", "synthesised before 'one' finishes playing");
+  releasePlay();
+  await queue.finish();
+  assert.deepEqual(events, ["synth:one", "play:one", "synth:two", "play:two"]);
+});
+
 test("SpeechQueue stops on abort and reports synthesis errors", async () => {
   const controller = new AbortController();
   const played = [];

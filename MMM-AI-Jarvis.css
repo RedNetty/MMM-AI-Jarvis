@@ -896,3 +896,42 @@
 @keyframes jv-strike { 0%, 70%, 100% { opacity: 0; } 72%, 78% { opacity: 1; } 75% { opacity: 0.3; } }
 @keyframes jv-mist { from { translate: -0.2rem 0; } to { translate: 0.35rem 0; } }
 @keyframes jv-spot { 0%, 18%, 100% { color: var(--jv-fg-2); } 4%, 14% { color: var(--jv-fg); } }
+
+/* ══ Whole-mirror effects (director.js) ════════════════════════════════
+ * These live outside .jv on purpose: they act on every module. */
+
+#iris-dimmer {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.4s ease;
+}
+
+/* Night mode: dim and warm, like a bedside clock. */
+body.iris-night .module:not(.MMM-AI-Jarvis) {
+  filter: sepia(0.55) saturate(1.6) hue-rotate(-25deg) brightness(0.62);
+  transition: filter 1.2s ease;
+}
+body:not(.iris-night) .module { transition: filter 1.2s ease; }
+
+/* "Where's the calendar?" */
+.module.iris-highlight { position: relative; }
+.module.iris-highlight::after {
+  content: "";
+  position: absolute;
+  inset: -0.6rem;
+  border: 2px solid #6fe3ff;
+  border-radius: 0.8rem;
+  box-shadow: 0 0 1.5rem rgba(111, 227, 255, 0.55);
+  pointer-events: none;
+  animation: iris-ring 1.4s ease-in-out 3;
+}
+
+@keyframes iris-ring {
+  0%, 100% { opacity: 0.15; transform: scale(0.97); }
+  50%      { opacity: 1;    transform: scale(1); }
+}
+

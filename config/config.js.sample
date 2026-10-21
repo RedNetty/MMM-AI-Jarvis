@@ -33,8 +33,9 @@
 
     // ── Text-to-speech ─────────────────────────────────────────────────────
     tts: {
-      provider: "piper",                         // "kokoro" (most natural; on a Mac/PC, Piper as fallback) | "piper" | "espeak" (robotic)
-      kokoroUrl: "",                             // Kokoro voice server, e.g. "http://macbook.local:5006" (setup-mac.sh installs it)
+      provider: "auto",                          // the most natural voice running: Kokoro, then Piper, then espeak-ng.
+                                                 // Or force one: "kokoro" | "piper" | "espeak" (robotic)
+      kokoroUrl: "",                             // Kokoro voice server, e.g. "http://macbook.local:5006"; "" = this machine
       kokoroVoice: "af_heart",                   // af_heart, af_bella, am_michael, am_adam, bf_emma, bm_george, …
       kokoroSpeed: null,                         // 1.1 = a little faster
       piperUrl: "http://127.0.0.1:5005",         // persistent Piper server (fast); a list for failover; "" = CLI only
@@ -45,6 +46,7 @@
       piperArgs: [],                             // extra CLI args passed to piper
       espeakVoice: "en-us",
       espeakSpeed: 165,
+      mergeChars: 260,                           // speak sentences after the first together, for natural flow (0 = one at a time)
     },
 
     // ── Language & vision model (Ollama) ───────────────────────────────────
@@ -65,6 +67,7 @@
       contextSize: 4096,                         // larger contexts use more RAM and are slower
       think: false,                              // slower but more careful reasoning on thinking models
       fastIntents: true,                         // handle common requests without the LLM (faster, reliable on small models)
+      router: "auto",                            // let the model route free-form requests: "auto" (only on a fast server, e.g. a Mac) | true | false
       outfitPlanner: "fast",                     // "fast" = instant rule-based picks; "ai" = the language model chooses (slower on a Pi)
     },
 

@@ -60,14 +60,14 @@ const CONFIG = {
   assistantName: "Iris",
   userName: "Sam",
   locale: "en-GB",
-  llm: { fastIntents: true },
+  llm: { fastIntents: true, router: false },
   conversation: { historyTurns: 6, resetAfter: 300000 },
   display: { cardTimeout: 60000, infoTimeout: 60000, snapshotTimeout: 8000 },
   customCommands: [{ phrases: ["next page"], notification: "PAGE_INCREMENT", reply: "Next page." }],
 };
 
-function build(url, { camera = { available: false }, outfitPlanner = "fast" } = {}) {
-  const config = { ...CONFIG, llm: { ...CONFIG.llm, outfitPlanner } };
+function build(url, { camera = { available: false }, outfitPlanner = "fast", router = false } = {}) {
+  const config = { ...CONFIG, llm: { ...CONFIG.llm, outfitPlanner, router } };
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "iris-assistant-"));
   const ollama = new Ollama({ url, model: "test-model", maxTokens: 100 });
   const wardrobe = new Wardrobe(dir);
@@ -435,4 +435,106 @@ test("JSON repair closes cut-off output and ignores brackets inside strings", ()
   assert.equal(repairJson('{"items":[{"name":"x, y]"}], "more":true}'), '{"items":[{"name":"x, y]"}], "more":true}');
   assert.equal(repairJson('Sure! {"a":[1,2]} hope that helps'), '{"a":[1,2]}');
   assert.equal(repairJson('{"items":[{"a":'), null);
+});
+
+test("the router sends paraphrases to the right skill, and grounds answers in facts or headlines", async () => {
+  const routes = {
+    "the calendar would look better over on the left": { action: "move", subject: "calendar", value: "left" },
+    "who won the big game": { action: "current", subject: "big game winner", value: "" },
+    "what's 9 squared plus one": { action: "convert", subject: "9^2+1", value: "" },
+    "tell me something nice": { action: "chat", subject: "", value: "" },
+  };
+  const server = await fakeOllama({
+    reply: (body) => {
+      if (body.format) {
+        const q = /Request: "(.*)"$/.exec(body.messages.at(-1).content)[1];
+        return { role: "assistant", content: JSON.stringify(routes[q]) };
+      }
+      return { role: "assistant", content: "Here you go." };
+    },
+  });
+  try {
+    const { assistant, screen, skills, cards } = build(server.url, { router: true });
+    screen.setInventory([{ id: "m1", name: "calendar", position: "top_right" }]);
+    const commands = [];
+    screen.on("command", (c) => commands.push(c));
+
+    assert.equal(await assistant.ask("the calendar would look better over on the left"), "Done. The calendar is in the top left now.");
+    assert.deepEqual(commands.at(-1), { action: "director", op: "move", args: { ids: ["m1"], position: "top_left" } });
+
+    assert.equal(await assistant.ask("what's 9 squared plus one"), "9 squared plus 1 is 82.");
+
+    // Current events: fresh headlines go into the prompt.
+    skills.info.newsReference = async (subject) => ({ text: `1. Tigers win the big game (Sports Daily, 2h ago) [${subject}]`, count: 1 });
+    assert.equal(await assistant.ask("who won the big game"), "Here you go.");
+    const chat = server.requests.filter((r) => r.url === "/api/chat" && !r.body.format).at(-1).body;
+    assert.match(chat.messages.at(-1).content, /Recent headlines about "big game winner".*Tigers win the big game/s);
+
+    // Chit-chat is answered without any lookup.
+    let looked = false;
+    skills.info.reference = async () => {
+      looked = true;
+      return null;
+    };
+    assert.equal(await assistant.ask("tell me something nice"), "Here you go.");
+    assert.equal(looked, false);
+    void cards;
+  } finally {
+    await server.close();
+  }
+});
+
+test("without the router, questions about things that change are grounded in headlines", async () => {
+  const server = await fakeOllama({ reply: () => ({ role: "assistant", content: "The Dodgers did." }) });
+  try {
+    const { assistant, skills } = build(server.url);
+    const searched = [];
+    skills.info.newsReference = async (subject) => {
+      searched.push(subject);
+      return { text: "1. Dodgers win the World Series (ESPN, 3h ago)", count: 1 };
+    };
+    let wikipedia = 0;
+    skills.info.reference = async () => {
+      wikipedia += 1;
+      return null;
+    };
+    assert.equal(await assistant.ask("who won the world series?"), "The Dodgers did.");
+    assert.deepEqual(searched, ["who won the world series"]);
+    const chat = server.requests.filter((r) => r.url === "/api/chat").at(-1).body;
+    assert.match(chat.messages.at(-1).content, /Recent headlines about "who won the world series".*Dodgers win/s);
+    assert.equal(wikipedia, 0);
+
+    // Nothing recent: fall back to the encyclopedia.
+    skills.info.newsReference = async () => null;
+    await assistant.ask("who is the current president of France?");
+    assert.equal(wikipedia, 1);
+
+    // Personal questions are never searched.
+    await assistant.ask("what happened to my keys");
+    assert.equal(wikipedia, 1);
+  } finally {
+    await server.close();
+  }
+});
+
+test("router auto mode only runs when the model reads prompts fast enough to be worth it", async () => {
+  const Router = require("../lib/Router");
+  const ollama = { promptRate: null };
+  const router = new Router({ ollama });
+  assert.equal(router.enabled, false, "unknown speed: don't risk slowing answers down");
+  ollama.promptRate = 80; // a Raspberry Pi
+  assert.equal(router.enabled, false);
+  ollama.promptRate = 2500; // a Mac
+  assert.equal(router.enabled, true);
+  assert.equal(new Router({ ollama: { promptRate: null }, mode: true }).enabled, true, "router: true always routes");
+
+  // The Ollama client measures each server's prompt speed from response timings.
+  const client = new Ollama({ url: "http://127.0.0.1:1", model: "m" });
+  const server = client.pool.active;
+  client._measure(server, { prompt_eval_count: 1000, prompt_eval_duration: 2e9 });
+  assert.equal(client.promptRate, 500);
+  client._measure(server, { prompt_eval_count: 12, prompt_eval_duration: 1e9 }); // mostly cached: ignored
+  assert.equal(client.promptRate, 500);
+  client._measure(server, { prompt_eval_count: 1000, prompt_eval_duration: 1e9 });
+  assert.equal(client.promptRate, 700, "smoothed");
 });

@@ -16,8 +16,9 @@ It also does things before you ask:
 - warns you **before it rains**
 - tells you when **your team's game** starts and how it ended
 
-It can see you through a camera, remember your clothes and your preferences, and show, hide or
-rearrange the other modules on your mirror.
+It runs **the whole mirror** by voice: move and resize any module, bigger text, dimming, night mode,
+screen off, and saved layouts you can switch between. It can also see you through a camera and
+remember your clothes and your preferences.
 
 **Everything runs on your own hardware.** Speech recognition, the language and vision model, and the
 voice are all local. There are no cloud accounts, no API keys and no usage bills, and your camera
@@ -58,16 +59,17 @@ images never leave the house.
 | | |
 |---|---|
 | 🎙️ **Hands-free voice** | Say "Iris…" and ask; follow up without repeating it; say "stop" to interrupt. Answers as soon as you finish a sentence, and never mistakes its own voice for yours |
-| 🗣️ **A natural voice** | [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) on a Mac (Piper on a Pi). Times, scores, dates and units are spoken the way people say them ("six forty-six", "two thirty-one left in the fourth quarter") |
+| 🗣️ **A natural voice** | The most natural voice that's running: [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) (a Mac or PC), then Piper, then espeak-ng, picked automatically. Sentences after the first are spoken together so the intonation flows. Times, scores, dates and units are spoken the way people say them ("six forty-six", "two thirty-one left in the fourth quarter") |
 | 🕰️ **Time that makes sense** | "What time is it in Tokyo?", "How long until Christmas?", "What day is Halloween?", "How many days until my birthday?" Exact answers, phrased like a person: "tonight at 7", "in 25 minutes", "tomorrow morning" |
 | 👗 **Wardrobe memory** | Hold clothes up to the mirror and say "add this to my wardrobe". IRIS photographs, names and catalogues them |
 | 🌦️ **Outfit planning** | "What should I wear to dinner tonight?" picks a coordinated outfit from your wardrobe for *tonight's* weather, the occasion, what you wore recently and what you like |
 | 👀 **Vision** | "How do I look?" / "Does this match?" gets honest feedback from the camera |
 | 🏆 **Live sports** | "What games are on right now?" shows a live scoreboard of every game across your leagues. "How are the Lakers doing?" pins one game that updates live. Covers the NFL, NBA, MLB, NHL, Premier League, Champions League, MLS and more |
 | ⏱️ **Timers** | "Set a pasta timer for 10 minutes" shows a countdown and announces when it's done |
-| 🪞 **Screen control** | "Hide the news", "show the calendar", "focus mode", "clear the screen", plus your own voice commands for any module |
+| 🪞 **The whole mirror, by voice** | "Move the calendar to the top right", "make the clock bigger", "the text is too small", "dim the mirror", "night mode", "turn the screen off", "where's the weather?", "save this layout as morning". Every change animates and is remembered across restarts. Plus "hide the news", "focus mode" and your own voice commands for any module |
+| 💬 **Understands you** | Plain phrasings work ("what's Tesla going for these days?", "shove the compliments up near the top", "crank up the brightness"). On a fast model server, anything the instant patterns miss is routed to the right skill by the model |
 | 📋 **Info panels** | Ask for a list, steps or a summary and IRIS puts it on screen |
-| 📊 **Real data, never guessed** | Facts and pictures from Wikipedia, headlines (Google News: top stories, a topic or anything you ask about), stocks, indices, crypto and commodities (Yahoo Finance), exchange rates (ECB), definitions, and exact maths, tips and unit conversions. All free, with no keys |
+| 📊 **Real data, never guessed** | Facts and pictures from Wikipedia, headlines (Google News: top stories, a topic or anything you ask about), stocks, indices, crypto and commodities (Yahoo Finance; several at once: "compare Apple and Microsoft"), exchange rates (ECB), definitions, and exact maths, tips and unit conversions. Questions about recent events ("who won the game last night?") are answered from fresh headlines. All free, with no keys |
 | ✨ **Animated cards** | Weather with a moving icon and an hourly chart that draws itself; prices that count up next to self-drawing charts; news that cascades in; an analog world clock; countdowns; the sun travelling its arc |
 | 🔔 **Surprises you** | A morning briefing when you walk up (weather, what to wear, your teams' games, the top story), a heads-up before it rains, and kick-off and final-score alerts for your teams. During quiet hours it shows these without speaking |
 | 🧠 **Long-term memory** | "Remember that my office is business casual" is kept across restarts and used in every answer |
@@ -79,11 +81,13 @@ images never leave the house.
  microphone ─► voice activity detection ─► whisper.cpp ─► wake word ─┐
                (speech only; transcribing  (speech-to-text)          │  its own voice is filtered out
                 starts at the first pause)                           ▼
-                                       ┌──────────── fast intents: time, weather, scores, timers,
-                                       │             outfits, screen, memory (no LLM needed)
+                                       ┌──────────── fast intents: time, weather, scores, stocks, timers,
+                                       │             outfits, the whole display, memory (no LLM needed)
                                        ▼
-                                 Ollama (qwen3.5) ◄── tools: camera, wardrobe, weather,
-                                 language + vision        scores, timers, screen, memory
+                                 router (fast servers) ── picks a skill for free-form requests
+                                       ▼
+                                 Ollama (qwen3.5) ◄── grounding: Wikipedia facts, fresh headlines
+                                 language + vision    tools: camera, wardrobe, weather, scores, …
                                        │
               mirror UI ◄── live cards ┤   written form: "7:30 PM", "58°"
               speaker   ◄── Kokoro / Piper ◄── spoken form: "seven thirty p.m.", "58 degrees"
@@ -101,6 +105,14 @@ images never leave the house.
   time, weather, scores, timers, outfits, camera, screen control, memory and "put … on the mirror".
   Small local models sometimes guess wrong, or claim they did something they didn't, so the
   important paths don't depend on them. Everything else goes to the LLM, which can call the same tools.
+- **The router** asks the model to pick one skill from a fixed list and fill in its subject, as JSON
+  ("what's Tesla going for?" → stock, Tesla). Small models fill a schema far more reliably than they
+  call tools freely. It costs one extra prompt, which is about half a second on a Mac but 15–20 s on
+  a Pi, so by default (`llm.router: "auto"`) it only runs when IRIS measures the model's server as
+  fast enough. On a Pi, the instant patterns cover the common paraphrases instead.
+- **Grounding.** Factual questions get a Wikipedia extract in front of the model, and questions
+  about things that change ("who won…", "who's the CEO of…", "latest…") get today's headlines, so
+  a small model answers from facts instead of guessing.
 - **Live cards** (scoreboards, timers, outfits, info panels) are managed on the server and refresh on
   their own. Live games update every 20–30 seconds, and a score animates when someone scores.
 
@@ -129,7 +141,13 @@ IRIS fixes this in two layers:
    Every rule was checked by speaking with the voice and transcribing the result back with Whisper.
 
 On a Mac, the voice is **Kokoro-82M**, which sounds far closer to a person than Piper. Piper stays as
-the instant fallback, so a sleeping Mac never leaves the mirror mute.
+the instant fallback, so a sleeping Mac never leaves the mirror mute. If only the robotic espeak-ng
+voice is available, the mirror says so and how to fix it, and IRIS switches back on its own when a
+natural voice comes up.
+
+The first sentence of a reply is synthesised on its own so IRIS starts talking right away. The
+sentences waiting after it are spoken together, so the voice carries its intonation across them
+instead of reading a string of separate lines.
 
 ### Built for speed on a Raspberry Pi
 
@@ -168,7 +186,8 @@ noted). Full size in [`docs/features`](docs/features).
 | ![Paris](docs/features/16-weather-paris.png)<br>**"What's the weather in Paris?"** | ![Markets](docs/features/17-markets.png)<br>**"How's the stock market doing?"** | ![Stock](docs/features/18-stock.png)<br>**"How is Nvidia stock doing?"** |
 | ![News](docs/features/19-news.png)<br>**"What's the news?"** | ![Knowledge](docs/features/20-knowledge.png)<br>**"Who is Taylor Swift?"** | ![Sunset](docs/features/21-sunset.png)<br>**"When is sunset?"** |
 | ![Currency](docs/features/22-currency.png)<br>**"Convert 100 dollars to euros"** | ![Maths](docs/features/23-math.png)<br>**"What's 17% of 240?"** | ![Definition](docs/features/24-definition.png)<br>**"Define serendipity"** |
-| ![Grounded](docs/features/25-grounded-fact.png)<br>**"How tall is Mount Everest?"** (model + Wikipedia) | | |
+| ![Grounded](docs/features/25-grounded-fact.png)<br>**"How tall is Mount Everest?"** (model + Wikipedia) | ![Move and resize](docs/features/26-move-resize.png)<br>**"Move the clock to the top right"**, then **"make it bigger"** | ![Night mode](docs/features/27-night-mode.png)<br>**"Night mode"** |
+| ![Stock](docs/features/29-stock-paraphrase.png)<br>**"What's Tesla going for these days?"** | ![Voice warning](docs/features/28-voice-warning.png)<br>**Robotic fallback voice, explained on the mirror** | |
 
 ## Hardware
 
@@ -353,7 +372,7 @@ The Pi's config then lists the Mac first and the Pi itself as a fallback:
 
 ```js
 stt: { whisperUrl: ["http://macbook.local:8178", "http://127.0.0.1:8178"] },
-tts: { provider: "kokoro", kokoroUrl: "http://macbook.local:5006", piperUrl: "http://127.0.0.1:5005" },
+tts: { kokoroUrl: "http://macbook.local:5006", piperUrl: "http://127.0.0.1:5005" }, // Kokoro, else Piper, else espeak
 llm: {
   servers: [
     { url: "http://macbook.local:11434", model: "qwen3.5:4b" },
@@ -362,7 +381,8 @@ llm: {
 },
 ```
 
-IRIS checks each server in the background every 15 seconds. If the Mac is asleep or off, requests
+With the model on the Mac, IRIS also turns on its router (see [How it works](#how-it-works)), so
+free-form requests reach the right skill. IRIS checks each server in the background every 15 seconds. If the Mac is asleep or off, requests
 go straight to the Pi with no waiting for timeouts, and the Pi's Piper voice speaks. When the Mac
 comes back, IRIS loads the model there in the background and switches back to it and to Kokoro.
 Failover was tested in MagicMirror by stopping and starting servers mid-session.
@@ -421,12 +441,21 @@ the wake word ("…and something warmer?"). Say **"stop"** to interrupt. "Hey Ir
 - "Put a packing list for the beach on the mirror"
 - "Hide the news" · "Show the calendar" · "Focus mode" · "Bring back everything" · "Close that"
 
+**The mirror itself**
+- "Move the calendar to the top right" · "Put the weather on the left" · "Move yourself to the bottom"
+- "Make the clock bigger" · "Shrink the news" · "The text is too small" · "I can't read the calendar"
+- "Dim the mirror" · "It's too bright" · "Brightness 40 percent" · "Turn the screen off" · "Wake up"
+- "Night mode" · "Day mode" · "Where's the calendar?" (it pulses) · "What's on the screen?"
+- "Save this layout as morning" · "Switch to my morning layout" · "Reset the layout" · "Reload the mirror"
+
 **Knowledge & data**
 - "Good morning" · "Brief me" · "What does my day look like?"
 - "Who is Taylor Swift?" · "Tell me about the Eiffel Tower" · "What is a black hole?"
 - "How tall is Mount Everest?" (answered by the model, with Wikipedia's facts in front of it)
 - "What's the news?" · "Tech headlines" · "What's the latest on SpaceX?"
 - "How's the stock market doing?" · "How is Apple stock?" · "Price of bitcoin this week"
+- "What's Tesla going for?" · "Compare Apple and Microsoft" · "Is Nvidia up today?" · "Amazon's 52-week high"
+- "Who won the game last night?" · "Who's the CEO of OpenAI?" (answered from today's headlines)
 - "Convert 100 dollars to euros" · "What's the euro exchange rate?"
 - "Define serendipity" · "What does ephemeral mean?"
 - "What's 17% of 240?" · "A 20% tip on $85" · "How many cups in a liter?" · "180 cm in feet"
@@ -454,13 +483,31 @@ back up or edit.
 
 ## Controlling the mirror
 
+<p align="center"><img src="docs/director.gif" width="300" alt="IRIS moving the clock and compliments, enlarging the clock, pointing out the weather, night mode, screen off and on, and resetting the layout"></p>
+
 IRIS knows which modules are on your mirror, so you can refer to them naturally ("the news",
-"the calendar", "the weather", "top left"). It hides and shows them through MagicMirror's own
-lock mechanism, so it never fights page-switching modules like MMM-pages. A module hidden by
-something else stays hidden.
+"the calendar", "the weather", "top left", "yourself"). It can:
+
+- **Move** any module to another region: "move the calendar to the top right". The module glides
+  to its new place.
+- **Resize** one module ("make the clock bigger", "shrink the news") or **all text** ("the text is
+  too small"; MagicMirror sizes everything from one font size).
+- **Dim** the mirror, set a brightness, or **turn the screen off**. Saying "Iris" (or someone
+  walking up, with a presence sensor) turns it back on.
+- **Night mode** dims and warms everything, for a bedroom mirror.
+- **Point things out:** "where's the calendar?" pulses a ring around it.
+- **Remember layouts:** "save this layout as morning", then "switch to my morning layout" any
+  time. "Reset the layout" puts everything back as configured.
+
+The current layout is kept in `data/layout.json` and re-applied when MagicMirror starts. Moves and
+sizes are applied in the browser, so your `config.js` is never touched.
+
+Hiding and showing go through MagicMirror's own lock mechanism, so IRIS never fights
+page-switching modules like MMM-pages. A module hidden by something else stays hidden.
 
 **Auto-hide:** modules listed in `display.autoHide` (by default `compliments`, which shares the lower
-third) fade out while IRIS is talking or showing a card, and come back afterwards.
+third) fade out while IRIS is talking or showing a card, and come back afterwards. Once you move one
+somewhere else, it no longer shares the space and stays visible.
 
 **Your own voice commands:** map any phrase to a MagicMirror notification to drive other modules:
 
@@ -507,17 +554,19 @@ fully commented copy.
 
 | Option | Default | Description |
 |---|---|---|
-| `provider` | `"piper"` | `"kokoro"` (most natural; needs a Mac or PC, falls back to Piper) · `"piper"` · `"espeak"` (robotic, needs no setup) |
-| `kokoroUrl` | `""` | Kokoro voice server (`scripts/kokoro_server.py`, installed by `setup-mac.sh`), or a list |
+| `provider` | `"auto"` | `"auto"`: the most natural voice that's running (Kokoro, then Piper, then espeak-ng) · `"kokoro"` (falls back to Piper) · `"piper"` · `"espeak"` (robotic, needs no setup) |
+| `kokoroUrl` | `""` | Kokoro voice server (`scripts/kokoro_server.py`, installed by `setup-mac.sh`), or a list. Empty = this machine (`http://127.0.0.1:5006`) |
 | `kokoroVoice` / `kokoroSpeed` | `"af_heart"` / `null` | Kokoro voice and speed (`1.1` is a little faster) |
 | `piperUrl` | `"http://127.0.0.1:5005"` | Piper voice server (keeps the voice loaded, ~0.2 s per sentence), or a list for failover |
 | `piperCommand` / `piperModel` | setup-script paths | Piper CLI fallback, used automatically if the server is down |
 | `piperSpeaker` | `null` | Speaker id for multi-speaker voices |
 | `piperLengthScale` | `null` | Speaking speed (`0.9` faster, `1.1` slower) |
 | `espeakVoice` / `espeakSpeed` | `"en-us"` / `165` | espeak-ng settings |
+| `mergeChars` | `260` | After the first sentence, speak waiting sentences together (up to this many characters) for natural flow. `0` = one sentence at a time |
 
-With `provider: "kokoro"`, each sentence goes to Kokoro while it's reachable and to Piper otherwise.
-If no voice is reachable at all, IRIS falls back to espeak-ng and says so on the mirror.
+With `provider: "auto"`, each sentence goes to Kokoro while it's reachable, then Piper, then espeak-ng.
+Servers are probed in the background, so a sleeping Mac costs no waiting. While only espeak-ng
+works, the mirror says so; the note disappears when a natural voice comes back.
 </details>
 
 <details>
@@ -533,6 +582,7 @@ If no voice is reachable at all, IRIS falls back to espeak-ng and says so on the
 | `temperature` / `maxTokens` / `contextSize` | `0.4` / `160` / `4096` | Generation settings (short spoken replies are faster) |
 | `think` | `false` | Let "thinking" models reason first (smarter, slower) |
 | `fastIntents` | `true` | Handle common requests without the LLM |
+| `router` | `"auto"` | Let the model pick the right skill for free-form requests. `"auto"` = only while the model's server reads prompts fast enough that it adds under ~2 s (a Mac yes, a Pi no) · `true` = always · `false` = never |
 | `outfitPlanner` | `"fast"` | `"fast"`: instant rule-based picks · `"ai"`: the language model chooses (richer reasons, much slower on a Pi) |
 </details>
 
@@ -667,8 +717,9 @@ to send `IRIS_ASK` with `"What should I wear today?"`.
 | Amber "Cannot reach Ollama" | `systemctl status ollama`; check `llm.ollamaUrl` |
 | "Ollama model … is not installed" | `ollama pull <model>` |
 | "Cannot reach the whisper.cpp server" | `systemctl status iris-whisper` / `journalctl -u iris-whisper` |
-| Robotic voice | Piper isn't running (`systemctl status iris-piper`), so IRIS fell back to espeak-ng. On a Mac, see `~/Library/Logs/iris-kokoro.log` |
-| The voice changed | With `provider: "kokoro"`, Piper speaks while the Kokoro server (the Mac) is unreachable |
+| Robotic voice (the mirror says "robotic backup voice") | Neither Kokoro nor Piper is running. Pi: `systemctl status iris-piper`. Mac: see `~/Library/Logs/iris-kokoro.log`. Or re-run the setup script |
+| The voice changed | Piper speaks while the Kokoro server (the Mac) is unreachable, and Kokoro takes over again when it's back |
+| Unusual phrasings aren't understood on a Pi | The router is off there because it would add 15–20 s per request (the log says "Router off"). Rephrase ("move the clock to the top right"), run the model on a Mac, or force it with `llm.router: true` |
 | IRIS never hears you | Find your mic with `arecord -l`, set `audio.micDevice: "plughw:CARD,0"`, test with `arecord -D plughw:1,0 -f S16_LE -r 16000 test.wav` |
 | IRIS triggers on background noise | Raise `audio.vadThreshold` (e.g. 900); turn on `debug` to see what it hears |
 | IRIS cuts you off mid-sentence | Raise `audio.pauseMs` (e.g. 500) or set it to `0`, and/or raise `audio.silenceMs` |
@@ -716,11 +767,13 @@ MMM-AI-Jarvis/
 ├── MMM-AI-Jarvis.js        # Front-end: status orb, conversation, live cards, module control
 ├── MMM-AI-Jarvis.css       # Mirror-friendly styles and animations (rem-based, follows MagicMirror's type scale)
 ├── cards.js                # Animated data cards: weather, markets, news, facts, clocks, countdowns, sun, briefing
+├── director.js             # Whole-mirror control in the browser: move, resize, text size, brightness, night mode
 ├── node_helper.js          # Bridge between the mirror and the engine; serves wardrobe photos
 ├── lib/
 │   ├── Iris.js             # Orchestrator: mic → VAD → STT → wake word → assistant → TTS; echo suppression
 │   ├── Assistant.js        # Conversation, system prompt, fast intents, LLM tool loop
 │   ├── intents.js          # Deterministic routing for common requests
+│   ├── Router.js           # Model-based routing for free-form requests (on fast servers)
 │   ├── tools.js            # Tool definitions exposed to the LLM
 │   ├── Skills.js           # Everything IRIS can do (vision, outfits, scores, timers, screen…)
 │   ├── Clock.js            # Time & date reasoning: time zones, countdowns, holidays, birthdays
@@ -731,7 +784,8 @@ MMM-AI-Jarvis/
 │   ├── data/               # Wikipedia, Google News, Yahoo Finance, Frankfurter, dictionary, calculator
 │   ├── Sports.js           # ESPN public scoreboards, natural score sentences
 │   ├── Widgets.js          # Live cards with expiry and self-refresh
-│   ├── Screen.js           # Knows and controls other modules on the mirror
+│   ├── Screen.js           # Knows and controls other modules on the mirror; layouts and saved scenes
+│   ├── DisplaySkills.js    # Spoken replies for display control ("Done. The calendar is in the top left now.")
 │   ├── Ollama.js           # Local LLM client (capability-aware, multi-server)
 │   ├── ServerPool.js       # Health-checked failover between servers (Mac → Pi)
 │   ├── Wardrobe.js, Memory.js, JsonStore.js, Camera.js, WebSearch.js

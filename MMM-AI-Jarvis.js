@@ -21,8 +21,10 @@ Module.register("MMM-AI-Jarvis", {
     },
 
     tts: {
-      provider: "piper", // "kokoro" (most natural; needs a Mac/PC, falls back to Piper) | "piper" | "espeak"
-      kokoroUrl: "", // e.g. "http://macbook.local:5006" (setup-mac.sh installs it)
+      // "auto": the most natural voice that is running – Kokoro, then Piper, then espeak-ng.
+      // Or force one: "kokoro" (falls back to Piper) | "piper" | "espeak".
+      provider: "auto",
+      kokoroUrl: "", // e.g. "http://macbook.local:5006"; "" = this machine (setup-mac.sh installs it)
       kokoroVoice: "af_heart", // af_heart, af_bella, am_michael, bf_emma, bm_george, …
       kokoroSpeed: null, // 1.1 = a little faster
       piperUrl: "http://127.0.0.1:5005", // or a list, like whisperUrl
@@ -33,6 +35,7 @@ Module.register("MMM-AI-Jarvis", {
       piperArgs: [],
       espeakVoice: "en-us",
       espeakSpeed: 165,
+      mergeChars: 260, // after the first sentence, speak waiting sentences together for natural flow (0 = one at a time)
     },
 
     llm: {
@@ -49,6 +52,9 @@ Module.register("MMM-AI-Jarvis", {
       contextSize: 4096,
       think: false,
       fastIntents: true,
+      // The model picks the right skill for anything the instant patterns miss. "auto" = only when the
+      // model's server is fast enough that it adds under ~2 s (a Mac, not a Pi); true = always; false = never.
+      router: "auto",
       outfitPlanner: "fast", // "fast" = instant rule-based picks; "ai" = the language model chooses (slower on a Pi)
     },
 
@@ -170,7 +176,8 @@ Module.register("MMM-AI-Jarvis", {
     this.state = "idle";
     this.widgets = new Map(); // id → { el, data, type }
     this.hiddenByIris = new Set();
-    this.autoHidden = false;
+    /** Identifiers of the modules display.autoHide has faded out. */
+    this.autoHidden = new Set();
     this.weatherSummary = null;
     this.timers = {};
     this.ticker = null;
@@ -198,7 +205,7 @@ Module.register("MMM-AI-Jarvis", {
   },
 
   getScripts() {
-    return [this.file("cards.js")];
+    return [this.file("cards.js"), this.file("director.js")];
   },
 
   getHeader() {
@@ -710,7 +717,8 @@ Module.register("MMM-AI-Jarvis", {
   /**
    * Fade out the modules in display.autoHide (e.g. compliments, which shares
    * the lower third with Iris) while Iris has something on screen, and
-   * bring them back once it is idle with nothing showing.
+   * bring them back once it is idle with nothing showing. A module someone
+   * has moved somewhere else no longer shares the space, so it stays put.
    */
   _updateAutoHide() {
     const names = this.config.display.autoHide ?? [];
@@ -718,18 +726,29 @@ Module.register("MMM-AI-Jarvis", {
 
     const hasDialog = Boolean(this.userEl.textContent || this.replyEl.textContent) && !this.dialogEl.classList.contains("is-cleared");
     const active = this.state !== "idle" || this.widgets.size > 0 || hasDialog;
-    if (active === this.autoHidden) return;
-    this.autoHidden = active;
-
+    const moved = window.IrisDirector?.state.moves ?? {};
     const options = { lockString: this.AUTO_LOCK };
     for (const m of MM.getModules()) {
       if (m === this || !names.includes(m.name)) continue;
-      if (active) m.hide(500, () => {}, options);
-      else m.show(800, () => {}, options);
+      const hide = active && !moved[m.identifier];
+      if (hide === this.autoHidden.has(m.identifier)) continue;
+      if (hide) {
+        this.autoHidden.add(m.identifier);
+        m.hide(500, () => {}, options);
+      } else {
+        this.autoHidden.delete(m.identifier);
+        m.show(800, () => {}, options);
+      }
     }
   },
 
-  _applyScreenCommand({ action, ids }) {
+  _applyScreenCommand({ action, ids, op, args }) {
+    // Moving, resizing, brightness, night mode, layouts: director.js.
+    if (action === "director") {
+      window.IrisDirector?.run(op, args);
+      this._updateAutoHide(); // a module moved out of Iris's way comes back into view
+      return;
+    }
     const done = () => this._reportModules();
     const byId = (id) => MM.getModules().find((m) => m.identifier === id);
     const options = { lockString: this.LOCK };
