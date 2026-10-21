@@ -273,5 +273,46 @@ test("voices: Kokoro first, Piper when the Mac is asleep", async () => {
 
   const tts = createTTS({ provider: "kokoro", kokoroUrl: "http://127.0.0.1:1", piperUrl: "http://127.0.0.1:2", piperModel: "" });
   assert.match(tts.name, /^Kokoro .* falling back to Piper/);
-  assert.throws(() => createTTS({ provider: "nope" }), /Use "kokoro", "piper" or "espeak"/);
+  assert.throws(() => createTTS({ provider: "nope" }), /Use "auto", "kokoro", "piper" or "espeak"/);
+});
+
+test("auto voice: Kokoro, then Piper, then espeak – and it knows when it sounds robotic", async () => {
+  const auto = createTTS({ provider: "auto", kokoroUrl: "", piperUrl: "http://127.0.0.1:2", piperModel: "" });
+  assert.deepEqual(
+    auto.engines.map((e) => e.constructor.name),
+    ["KokoroTTS", "PiperTTS", "EspeakTTS"],
+  );
+  assert.equal(auto.engines[0].url, "http://127.0.0.1:5006", "no kokoroUrl = Kokoro on this machine");
+  assert.equal(createTTS({}).engines.length, 2, "auto is the default; no Piper configured = Kokoro then espeak");
+
+  const switched = [];
+  const natural = { name: "Natural", available: true, synthesize: async (t) => Buffer.from(`natural:${t}`), healthCheck: async () => null };
+  const robot = { name: "Robot", robotic: true, synthesize: async (t) => Buffer.from(`robot:${t}`), healthCheck: async () => null };
+  const chain = new ChainTTS([natural, robot], { onSwitch: (e) => switched.push(e.name) });
+  assert.equal(chain.robotic, false);
+  assert.equal((await chain.synthesize("Hi.")).toString(), "natural:Hi.");
+
+  natural.available = false; // the Mac went to sleep
+  assert.equal(chain.active, robot);
+  assert.equal((await chain.synthesize("Hi.")).toString(), "robot:Hi.");
+  assert.equal(chain.robotic, true);
+
+  natural.available = true; // and woke up
+  assert.equal((await chain.synthesize("Hi.")).toString(), "natural:Hi.");
+  assert.equal(chain.robotic, false);
+  assert.deepEqual(switched, ["Natural", "Robot", "Natural"]);
+
+  // An engine that failed its health check goes to the back of the line…
+  natural.healthCheck = async () => "Natural is down.";
+  assert.equal(await chain.healthCheck(), null, "the robot still works");
+  assert.equal(chain.active, robot);
+  // …but only for a while: one blip doesn't leave the robot speaking for good.
+  chain.failedAt.set(natural, Date.now() - ChainTTS.RETRY_MS - 1);
+  assert.equal(chain.active, natural);
+
+  // A sentence that fails goes to the next voice, and the failed one waits its turn.
+  const flaky = { name: "Flaky", synthesize: async () => Promise.reject(new Error("timeout")), healthCheck: async () => null };
+  const chain2 = new ChainTTS([flaky, robot]);
+  assert.equal((await chain2.synthesize("Hi.")).toString(), "robot:Hi.");
+  assert.equal(chain2.active, robot);
 });

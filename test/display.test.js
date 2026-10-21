@@ -122,7 +122,8 @@ test("Screen: module matching and commands", () => {
   assert.deepEqual(s.find("holidays").map((m) => m.id), ["m2"]);
   assert.deepEqual(s.find("traffic").map((m) => m.id), ["m5"]);
   assert.deepEqual(s.find("top left").map((m) => m.id), ["m2", "m5"]);
-  assert.deepEqual(s.find("jarvis"), [], "never targets itself");
+  assert.deepEqual(s.find("yourself").map((m) => m.id), ["m4"], "the assistant can be moved and resized");
+  assert.deepEqual(s.find("calendar").map((m) => m.id), ["m2"]);
   assert.deepEqual(s.find("pancakes"), []);
 
   assert.equal(s.focus(), 3, "focus hides every visible module");
