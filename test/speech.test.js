@@ -106,8 +106,11 @@ test("clock: time questions are answered exactly, without a language model", () 
 
   // Places named in a request get their local time in the language model's context.
   const places = clock.placeTimes("is it too late to call my mom in London? I fly from Paris to Los Angeles", NOW);
-  assert.equal(places.length, 3);
-  assert.match(places[0], /^London: \d{1,2}(:\d\d)? [AP]M \w+day$/);
+  // The mirror's own zone is left out (it's already the bracketed time).
+  const local = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const expected = ["london", "paris", "los angeles"].filter((p) => Clock.zoneFor(p) !== local);
+  assert.equal(places.length, expected.length);
+  assert.match(places[0], /^(?:London|Paris|Los Angeles): \d{1,2}(:\d\d)? [AP]M \w+day$/);
   assert.deepEqual(clock.placeTimes("I'm in the mood for pizza", NOW), []);
   assert.equal(Clock.zoneFor("new york"), "America/New_York");
   assert.equal(Clock.zoneFor("the uk"), "Europe/London");
