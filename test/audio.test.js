@@ -150,15 +150,16 @@ test("SpeechQueue plays streamed sentences in order, synthesising one ahead", as
   assert.ok(maxInFlight <= 1, "never synthesises more than one sentence ahead");
 });
 
-test("SpeechQueue speaks the first sentence alone, then waiting sentences together", async () => {
+test("SpeechQueue speaks the first sentence alone, then merges what a fast voice can prepare in time", async () => {
   const synthesized = [];
   const played = [];
   const queue = new SpeechQueue({
     signal: new AbortController().signal,
     mergeChars: 40,
+    durationOf: () => 2000, // each clip plays for 2 s…
     synthesize: async (text) => {
       synthesized.push(text);
-      return Buffer.from(text);
+      return Buffer.from(text); // …and synthesis is instant (Kokoro on a Mac)
     },
     play: async (wav) => {
       played.push(String(wav));
@@ -170,8 +171,34 @@ test("SpeechQueue speaks the first sentence alone, then waiting sentences togeth
   await queue.finish();
 
   assert.equal(synthesized[0], "Sure.", "the opening sentence is never held back");
-  assert.deepEqual(synthesized.slice(1), ["It is sunny. High of 70.", "Low of 55 tonight. Enjoy it."]);
+  assert.deepEqual(synthesized.slice(1), ["It is sunny. High of 70.", "Low of 55 tonight. Enjoy it."], "merged up to mergeChars");
   assert.deepEqual(played, synthesized);
+});
+
+test("SpeechQueue doesn't merge more than a slow voice can prepare before the current clip ends", async () => {
+  const synthesized = [];
+  const queue = new SpeechQueue({
+    signal: new AbortController().signal,
+    mergeChars: 260,
+    durationOf: () => 120, // short clips…
+    synthesize: async (text) => {
+      synthesized.push(text);
+      await new Promise((r) => setTimeout(r, text.length * 4)); // …and a slow voice: 4 ms per character
+      return Buffer.from(text);
+    },
+    play: async () => ({ interrupted: false }),
+  });
+  for (const s of ["Okay.", "Here is the weather.", "It is sunny.", "Enjoy it."]) queue.push(s);
+  await queue.finish();
+  // 120 ms × 0.6 / 4 ms per character ≈ 18 characters of budget: nothing fits two sentences.
+  assert.deepEqual(synthesized, ["Okay.", "Here is the weather.", "It is sunny.", "Enjoy it."]);
+});
+
+test("WAV duration from the header", () => {
+  const { pcmToWav, wavDurationMs } = require("../lib/audio/wav");
+  assert.equal(wavDurationMs(pcmToWav(Buffer.alloc(24000 * 2), 24000)), 1000);
+  assert.equal(wavDurationMs(pcmToWav(Buffer.alloc(22050), 22050)), 500);
+  assert.equal(wavDurationMs(Buffer.from("not a wav")), null);
 });
 
 test("SpeechQueue prepares a sentence that streams in during playback right away", async () => {

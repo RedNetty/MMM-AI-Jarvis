@@ -935,3 +935,22 @@ body:not(.iris-night) .module { transition: filter 1.2s ease; }
   50%      { opacity: 1;    transform: scale(1); }
 }
 
+
+/* ── Any screen: portrait mirror, MacBook, TV ───────────────────────────
+ * On a landscape display cards sit side by side, so they use the width
+ * instead of running off the bottom. MMM-AI-Jarvis.js then fits IRIS into
+ * the space left by the other modules (narrowing, setting older cards
+ * aside, or nudging it back on screen).
+ */
+.jv-card.is-squeezed { display: none; }
+
+@media (orientation: landscape) {
+  .jv { width: min(46rem, 92vw); }
+
+  .jv-widgets {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 22rem));
+    justify-content: center;
+    align-items: start;
+  }
+}

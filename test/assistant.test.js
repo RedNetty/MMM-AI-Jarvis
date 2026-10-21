@@ -528,6 +528,21 @@ test("router auto mode only runs when the model reads prompts fast enough to be 
   assert.equal(router.enabled, true);
   assert.equal(new Router({ ollama: { promptRate: null }, mode: true }).enabled, true, "router: true always routes");
 
+  // Even on a fast server, conversation and questions skip the router (no added delay);
+  // only requests that look like they want a skill are routed.
+  for (const q of ["tell me a joke", "why is the sky blue", "who won the world series", "good night", "what is the meaning of life"]) {
+    assert.equal(router.shouldRoute(q), false, q);
+  }
+  for (const q of ["the calendar would look better over on the left", "it's way too bright in here", "start a 5 minute countdown"]) {
+    assert.equal(router.shouldRoute(q), true, q);
+  }
+  assert.equal(router.shouldRoute("what about apple", { query: "how is tesla doing", action: "market_quote" }), true, "follow-up on a skill");
+  assert.equal(router.shouldRoute("what about you", { query: "how is tesla doing", action: "market_quote" }), false);
+  assert.equal(router.shouldRoute("and Paris?", { query: "tell me about London", action: "answer" }), false, "follow-up on a conversation");
+  ollama.promptRate = 80;
+  assert.equal(router.shouldRoute("it's way too bright in here"), false, "never on a slow server");
+  assert.equal(new Router({ ollama, mode: true }).shouldRoute("tell me a joke"), true, "router: true routes everything");
+
   // The Ollama client measures each server's prompt speed from response timings.
   const client = new Ollama({ url: "http://127.0.0.1:1", model: "m" });
   const server = client.pool.active;

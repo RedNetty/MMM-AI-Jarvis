@@ -67,7 +67,7 @@
       contextSize: 4096,                         // larger contexts use more RAM and are slower
       think: false,                              // slower but more careful reasoning on thinking models
       fastIntents: true,                         // handle common requests without the LLM (faster, reliable on small models)
-      router: "auto",                            // let the model route free-form requests: "auto" (only on a fast server, e.g. a Mac) | true | false
+      router: "auto",                            // let the model route skill-like requests the patterns miss: "auto" (only on a fast server, e.g. a Mac) | true | false
       outfitPlanner: "fast",                     // "fast" = instant rule-based picks; "ai" = the language model chooses (slower on a Pi)
     },
 

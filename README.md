@@ -107,9 +107,12 @@ images never leave the house.
   important paths don't depend on them. Everything else goes to the LLM, which can call the same tools.
 - **The router** asks the model to pick one skill from a fixed list and fill in its subject, as JSON
   ("what's Tesla going for?" → stock, Tesla). Small models fill a schema far more reliably than they
-  call tools freely. It costs one extra prompt, which is about half a second on a Mac but 15–20 s on
-  a Pi, so by default (`llm.router: "auto"`) it only runs when IRIS measures the model's server as
-  fast enough. On a Pi, the instant patterns cover the common paraphrases instead.
+  call tools freely. Ollama can't cache any of its prompt on qwen3.5 (measured), so each routing call
+  costs about a second on a Mac and 15–20 s on a Pi. By default (`llm.router: "auto"`) it only runs
+  when IRIS measures the model's server as fast enough, and only for requests that look like they
+  want a skill ("the calendar would look better on the left"). Conversation and questions go
+  straight to the model with no added delay. On a Pi, the instant patterns cover the common
+  paraphrases instead.
 - **Grounding.** Factual questions get a Wikipedia extract in front of the model, and questions
   about things that change ("who won…", "who's the CEO of…", "latest…") get today's headlines, so
   a small model answers from facts instead of guessing.
@@ -147,7 +150,17 @@ natural voice comes up.
 
 The first sentence of a reply is synthesised on its own so IRIS starts talking right away. The
 sentences waiting after it are spoken together, so the voice carries its intonation across them
-instead of reading a string of separate lines.
+instead of reading a string of separate lines. IRIS measures how fast the voice synthesises and only
+merges what will be ready before the current sentence finishes, so merging never causes a pause:
+Kokoro on a Mac merges generously, a slower voice merges little.
+
+### Any screen
+
+The layout adapts to the display: a portrait mirror, a MacBook's landscape screen or a TV. On a
+landscape screen cards sit side by side. IRIS measures the space the other modules leave and fits
+into it: when there isn't room for every card, older ones are set aside (the newest always shows,
+and the rest return when there's space), and next to a clock or weather column it narrows to the gap
+between them. It re-fits when the window resizes or another module changes size.
 
 ### Built for speed on a Raspberry Pi
 
@@ -562,7 +575,7 @@ fully commented copy.
 | `piperSpeaker` | `null` | Speaker id for multi-speaker voices |
 | `piperLengthScale` | `null` | Speaking speed (`0.9` faster, `1.1` slower) |
 | `espeakVoice` / `espeakSpeed` | `"en-us"` / `165` | espeak-ng settings |
-| `mergeChars` | `260` | After the first sentence, speak waiting sentences together (up to this many characters) for natural flow. `0` = one sentence at a time |
+| `mergeChars` | `260` | After the first sentence, speak waiting sentences together for natural flow: at most this many characters, and only as much as the voice can prepare before the current sentence ends. `0` = one sentence at a time |
 
 With `provider: "auto"`, each sentence goes to Kokoro while it's reachable, then Piper, then espeak-ng.
 Servers are probed in the background, so a sleeping Mac costs no waiting. While only espeak-ng
@@ -582,7 +595,7 @@ works, the mirror says so; the note disappears when a natural voice comes back.
 | `temperature` / `maxTokens` / `contextSize` | `0.4` / `160` / `4096` | Generation settings (short spoken replies are faster) |
 | `think` | `false` | Let "thinking" models reason first (smarter, slower) |
 | `fastIntents` | `true` | Handle common requests without the LLM |
-| `router` | `"auto"` | Let the model pick the right skill for free-form requests. `"auto"` = only while the model's server reads prompts fast enough that it adds under ~2 s (a Mac yes, a Pi no) · `true` = always · `false` = never |
+| `router` | `"auto"` | Let the model pick the right skill for free-form requests. `"auto"` = only for requests that look like they want a skill, and only while the model's server is fast enough that it adds under ~2 s (a Mac yes, a Pi no) · `true` = every request · `false` = never |
 | `outfitPlanner` | `"fast"` | `"fast"`: instant rule-based picks · `"ai"`: the language model chooses (richer reasons, much slower on a Pi) |
 </details>
 

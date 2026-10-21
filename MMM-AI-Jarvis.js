@@ -52,8 +52,9 @@ Module.register("MMM-AI-Jarvis", {
       contextSize: 4096,
       think: false,
       fastIntents: true,
-      // The model picks the right skill for anything the instant patterns miss. "auto" = only when the
-      // model's server is fast enough that it adds under ~2 s (a Mac, not a Pi); true = always; false = never.
+      // The model picks the right skill for anything the instant patterns miss. "auto" = only for
+      // requests that look like they want a skill, and only on a server fast enough (a Mac, not a Pi)
+      // that it adds under ~2 s; conversation is never delayed. true = every request; false = never.
       router: "auto",
       outfitPlanner: "fast", // "fast" = instant rule-based picks; "ai" = the language model chooses (slower on a Pi)
     },
@@ -360,6 +361,109 @@ Module.register("MMM-AI-Jarvis", {
       clearInterval(this.ticker);
       this.ticker = null;
     }
+  },
+
+  // ─── Fitting the screen ────────────────────────────────────────────────
+
+  /**
+   * Re-fit when the window changes size (a MacBook's display, a TV, a
+   * rotated monitor) or another module grows or shrinks (new headlines,
+   * a module shown or hidden).
+   */
+  _watchLayout() {
+    if (this.layoutObserver || typeof ResizeObserver === "undefined") return;
+    this.layoutObserver = new ResizeObserver(() => this._scheduleFit());
+    for (const m of document.querySelectorAll(".module")) {
+      if (m.id !== this.identifier) this.layoutObserver.observe(m);
+    }
+    window.addEventListener("resize", () => this._scheduleFit());
+    this._scheduleFit();
+  },
+
+  /**
+   * Fit on the next frame (several changes in one frame fit once), or after
+   * a delay for animations to finish.
+   * @param {number} [delay=0] ms
+   */
+  _scheduleFit(delay = 0) {
+    if (delay) {
+      clearTimeout(this.timers.fit);
+      this.timers.fit = setTimeout(() => this._scheduleFit(), delay);
+      return;
+    }
+    if (this.fitFrame) return;
+    this.fitFrame = requestAnimationFrame(() => {
+      this.fitFrame = null;
+      this._fitLayout();
+    });
+  },
+
+  /**
+   * Keep IRIS on screen and clear of the other modules on any display: a
+   * portrait mirror, a MacBook's landscape screen or a TV. Everything
+   * happens in one frame (reset, measure, adjust), so nothing flickers:
+   *  1. too big, set the oldest cards aside (the newest always stays, and
+   *     the others come back as soon as there is room);
+   *  2. even one card collides with a module beside IRIS (a clock on the
+   *     left, the weather on the right), narrow to the free band between
+   *     them and set cards aside again;
+   *  3. still off screen, nudge it back on.
+   */
+  _fitLayout() {
+    const wrapper = document.getElementById(this.identifier);
+    const root = this.root;
+    if (!root || !wrapper?.offsetParent) return;
+
+    root.style.width = "";
+    root.style.transform = "";
+    const cards = [...this.widgetsEl.children].filter((c) => !c.classList.contains("is-leaving"));
+    cards.forEach((c) => c.classList.remove("is-squeezed"));
+
+    const margin = 8;
+    const vh = window.innerHeight;
+    const container = wrapper.parentElement;
+    const others = [...document.querySelectorAll(".module")]
+      .filter((m) => m !== wrapper && m.parentElement !== container && !m.classList.contains("hidden") && m.offsetParent && !m.closest(".region.fullscreen"))
+      .filter((m) => Number.parseFloat(getComputedStyle(m).opacity) > 0.05)
+      .map((m) => m.getBoundingClientRect())
+      .filter((r) => r.width > 4 && r.height > 4);
+    const spanX = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left);
+    const spanY = (a, b) => Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+    const fits = () => {
+      const r = root.getBoundingClientRect();
+      return r.top >= margin && r.bottom <= vh - margin && !others.some((o) => spanX(r, o) > 4 && spanY(r, o) > 4);
+    };
+    if (fits()) return;
+    // The list is newest first: set cards aside from the end, keeping the newest.
+    const setAside = () => {
+      cards.forEach((c) => c.classList.remove("is-squeezed"));
+      for (let i = cards.length - 1; i > 0 && !fits(); i--) cards[i].classList.add("is-squeezed");
+    };
+
+    // 1. At full width, with fewer cards.
+    setAside();
+
+    // 2. Narrower, to clear the modules beside IRIS.
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 20;
+    for (let pass = 0; pass < 3 && !fits(); pass++) {
+      const r = root.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      let half = r.width / 2;
+      for (const o of others) {
+        if (spanY(r, o) <= 4 || spanX(r, o) <= 4 || (o.left < cx && o.right > cx)) continue; // not beside us
+        half = Math.min(half, o.right <= cx ? cx - o.right - rem : o.left - cx - rem);
+      }
+      if (half * 2 < 16 * rem || half * 2 >= r.width - 1) break;
+      root.style.width = `${Math.floor(half * 2)}px`;
+      setAside();
+    }
+
+    // 3. Nudge back onto the screen.
+    const r = root.getBoundingClientRect();
+    let dy = 0;
+    if (r.bottom > vh - margin) dy = -Math.min(r.bottom - (vh - margin), Math.max(0, r.top - margin));
+    else if (r.top < margin) dy = Math.min(margin - r.top, Math.max(0, vh - margin - r.bottom));
+    if (dy) root.style.transform = `translateY(${Math.round(dy)}px)`;
   },
 
   _buildWidget(entry, w) {
@@ -810,14 +914,19 @@ Module.register("MMM-AI-Jarvis", {
         this._renderProblems(Array.isArray(payload) ? payload : []);
         break;
       default:
-        break;
+        return;
     }
+    // Anything above can change IRIS's size: fit it now, and again once
+    // cards have animated in or out and moved modules have settled.
+    this._scheduleFit();
+    this._scheduleFit(900);
   },
 
   notificationReceived(notification, payload, sender) {
     switch (notification) {
       case "DOM_OBJECTS_CREATED":
         this._reportModules();
+        this._watchLayout();
         break;
       case "IRIS_ASK":
       case "JARVIS_ASK": { // pre-IRIS name, still accepted
