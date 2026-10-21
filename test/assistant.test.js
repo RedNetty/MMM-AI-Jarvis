@@ -2,6 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+
+// Replies pick among phrasings at random; tests always get the first one.
+require("../lib/speech/talk").random = () => 0;
 const http = require("http");
 const fs = require("fs");
 const os = require("os");
@@ -54,7 +57,7 @@ async function fakeOllama({ capabilities = ["completion", "tools", "vision", "th
 }
 
 const CONFIG = {
-  assistantName: "Jarvis",
+  assistantName: "Iris",
   userName: "Sam",
   locale: "en-GB",
   llm: { fastIntents: true },
@@ -65,7 +68,7 @@ const CONFIG = {
 
 function build(url, { camera = { available: false }, outfitPlanner = "fast" } = {}) {
   const config = { ...CONFIG, llm: { ...CONFIG.llm, outfitPlanner } };
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-assistant-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "iris-assistant-"));
   const ollama = new Ollama({ url, model: "test-model", maxTokens: 100 });
   const wardrobe = new Wardrobe(dir);
   const memory = new Memory(dir);
@@ -114,7 +117,7 @@ test("tool-calling loop streams the answer and sends only the relevant tools", a
     const chat = chats[0];
     assert.equal(chat.think, false, "think flag sent to thinking-capable model");
     assert.equal(chat.stream, true);
-    assert.match(chat.messages[0].content, /You are Jarvis, a friendly voice assistant in a smart mirror for Sam/);
+    assert.match(chat.messages[0].content, /You are Iris, the voice of a smart mirror for Sam/);
     assert.doesNotMatch(chat.messages[0].content, /\d:\d\d/, "no clock time in the system prompt (it would defeat the prompt cache)");
     assert.match(chat.messages.at(-1).content, /^\[[^\]]*\d{1,2}:\d\d[^\]]*\]\n\nyellow clothes never suit me$/, "per-request context rides on the user message");
     const toolNames = chat.tools.map((t) => t.function.name);
@@ -211,7 +214,7 @@ test("AI outfit stylist uses structured output, validates ids and shows a card",
 
     // "I'll wear that" → logs the suggestion.
     const logged = skills.logOutfitWorn();
-    assert.match(logged.spoken, /Grey wool coat/);
+    assert.equal(logged.spoken, "Noted, that's today's outfit.");
     assert.equal(wardrobe.items[0].wearCount, 1);
   } finally {
     await server.close();
@@ -335,7 +338,7 @@ test("outfit card includes pieces the model names aloud but omits from item_ids"
 
     const reply = await assistant.ask("what should I wear?");
     assert.deepEqual(cards.at(-1).items.map((i) => i.name), ["Navy oxford shirt", "Red wool cap"]);
-    assert.equal(reply, "How about your navy oxford shirt and your red wool cap? Add the red wool cap for a pop of colour.");
+    assert.equal(reply, "How about your navy oxford shirt and red wool cap? Add the red wool cap for a pop of colour.");
   } finally {
     await server.close();
   }
@@ -381,6 +384,7 @@ test("fast outfit planner and weather answers need no language model", async () 
   const server = await fakeOllama({ reply: () => assert.fail("LLM must not be called") });
   try {
     const { assistant, wardrobe, cards, skills } = build(server.url);
+    skills.now = () => new Date(2026, 9, 21, 9, 0);
     wardrobe.add({ name: "Grey hoodie", category: "top", colors: ["grey"], warmth: 3 });
     wardrobe.add({ name: "White tee", category: "top", colors: ["white"], warmth: 1 });
     wardrobe.add({ name: "Dark jeans", category: "bottom", colors: ["blue"], warmth: 3 });
@@ -392,11 +396,15 @@ test("fast outfit planner and weather answers need no language model", async () 
     // build() reports 4°C and rain from the mirror's weather module.
     const reply = await assistant.ask("what should I wear today?");
     assert.deepEqual(cards.at(-1).items.map((i) => i.name), ["Grey hoodie", "Dark jeans", "Brown leather boots", "Black rain jacket"]);
-    assert.equal(reply, "It's 4 degrees and wet, so I'd go with your grey hoodie, your dark jeans and your brown leather boots. Add your black rain jacket for the rain.");
+    assert.equal(reply, "It's 4° and wet, so I'd go with your grey hoodie, dark jeans and brown leather boots. Add the black rain jacket for the rain.");
     assert.equal(skills.lastSuggestion.itemIds.length, 4);
 
-    assert.equal(await assistant.ask("how cold is it?"), "It's 4 degrees now, with a high of 6 degrees and a low of 1 degree. Bring a warm coat.");
-    assert.equal(await assistant.ask("will it rain today?"), "Yes, expect rain today.");
+    // Said the way a person would, for 9 in the morning.
+    assert.equal(await assistant.ask("how cold is it?"), "It's 4° right now. It'll get up to 6° later.");
+    assert.equal(await assistant.ask("will it rain today?"), "Yes, it's raining right now, so take an umbrella.");
+    assert.equal(await assistant.ask("do I need a coat?"), "Yes, bundle up. It feels like 4° and it's wet, so wear a warm coat.");
+    assert.equal(await assistant.ask("what time is it?"), "It's 9:00.");
+    assert.equal(await assistant.ask("how long until Halloween?"), "Halloween is 10 days away, on Saturday, October 31st.");
   } finally {
     await server.close();
   }

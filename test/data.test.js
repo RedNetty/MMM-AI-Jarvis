@@ -2,6 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+
+// Replies pick among phrasings at random; tests always get the first one.
+require("../lib/speech/talk").random = () => 0;
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -13,7 +16,7 @@ const { detectIntent } = require("../lib/intents");
 const { isoDate } = require("../lib/text");
 
 function tempDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-test-"));
+  return fs.mkdtempSync(path.join(os.tmpdir(), "iris-test-"));
 }
 
 test("Wardrobe add/sanitize/find/resolve and persistence", () => {
@@ -116,7 +119,8 @@ test("Open-Meteo response parsing", () => {
         wind_speed_10m_max: [30, 10],
       },
     },
-    1,
+    { day: 1 },
+    new Date(2026, 9, 20, 9),
   );
   assert.equal(parsed.current, null);
   assert.equal(parsed.day.label, "tomorrow");

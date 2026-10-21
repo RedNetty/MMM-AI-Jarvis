@@ -1,13 +1,14 @@
 /* MagicMirror² Module: MMM-AI-Jarvis
+ * IRIS – Image Recognition & Intelligent Speech.
  * A private, on-device voice assistant and personal stylist for your mirror.
  * https://github.com/RedNetty/MMM-AI-Jarvis
  */
 
 Module.register("MMM-AI-Jarvis", {
   defaults: {
-    assistantName: "Jarvis",
-    wakeWord: "jarvis",
-    wakeWordAliases: ["jervis", "jarvus", "javis"],
+    assistantName: "Iris",
+    wakeWord: "iris",
+    wakeWordAliases: ["aris", "irus", "iras", "eyeris"], // how speech recognition sometimes hears it
     userName: "",
     language: "en",   // Whisper language code ("en", "de", "fr", …)
     locale: null,     // Date/time formatting; null = MagicMirror's global locale
@@ -20,10 +21,13 @@ Module.register("MMM-AI-Jarvis", {
     },
 
     tts: {
-      provider: "piper", // "piper" | "espeak"
+      provider: "piper", // "kokoro" (most natural; needs a Mac/PC, falls back to Piper) | "piper" | "espeak"
+      kokoroUrl: "", // e.g. "http://macbook.local:5006" (setup-mac.sh installs it)
+      kokoroVoice: "af_heart", // af_heart, af_bella, am_michael, bf_emma, bm_george, …
+      kokoroSpeed: null, // 1.1 = a little faster
       piperUrl: "http://127.0.0.1:5005", // or a list, like whisperUrl
-      piperCommand: "~/.local/share/jarvis/piper-venv/bin/piper",
-      piperModel: "~/.local/share/jarvis/voices/en_GB-alan-medium.onnx",
+      piperCommand: "~/.local/share/iris/piper-venv/bin/piper",
+      piperModel: "~/.local/share/iris/voices/en_US-lessac-medium.onnx",
       piperSpeaker: null,
       piperLengthScale: null,
       piperArgs: [],
@@ -54,6 +58,7 @@ Module.register("MMM-AI-Jarvis", {
       vadThreshold: 500,
       noiseMultiplier: 3,
       silenceMs: 750,
+      pauseMs: 300, // start transcribing at the first short pause; "Iris." alone is answered right away
       preRollMs: 400,
       minUtteranceMs: 350,
       maxUtteranceMs: 15000,
@@ -108,7 +113,7 @@ Module.register("MMM-AI-Jarvis", {
       snapshotTimeout: 8000,
       errorTimeout: 6000,
       showProblems: true,
-      autoHide: ["compliments"], // modules faded out while Jarvis is showing something
+      autoHide: ["compliments"], // modules faded out while Iris is showing something
     },
   },
 
@@ -147,7 +152,7 @@ Module.register("MMM-AI-Jarvis", {
 
     this.state = "idle";
     this.widgets = new Map(); // id → { el, data, type }
-    this.hiddenByJarvis = new Set();
+    this.hiddenByIris = new Set();
     this.autoHidden = false;
     this.weatherSummary = null;
     this.timers = {};
@@ -167,7 +172,7 @@ Module.register("MMM-AI-Jarvis", {
 
     const obsolete = ["projectId", "location", "model", "serviceAccountFile", "ttsVoice", "speechLanguage"].filter((k) => k in c);
     if (obsolete.length) {
-      Log.warn(`[${this.name}] Ignoring Google Cloud options from v2 (${obsolete.join(", ")}). Jarvis now runs locally – see the README.`);
+      Log.warn(`[${this.name}] Ignoring Google Cloud options from v2 (${obsolete.join(", ")}). The assistant now runs locally – see the README.`);
     }
   },
 
@@ -353,6 +358,15 @@ Module.register("MMM-AI-Jarvis", {
         el.append(head.el, rows, entry.detailEl);
         break;
       }
+      case "scoreboard": {
+        const head = this._cardHead();
+        entry.labelEl = head.label;
+        entry.statusEl = head.meta;
+        entry.listEl = this._el("div", "jv-board");
+        entry.scores = new Map();
+        el.append(head.el, entry.listEl);
+        break;
+      }
       case "timer": {
         const head = this._cardHead();
         head.label.textContent = "Timer";
@@ -447,6 +461,9 @@ Module.register("MMM-AI-Jarvis", {
         entry.detailEl.textContent = d.state === "pre" ? this._formatKickoff(d.date) : d.detail;
         break;
       }
+      case "scoreboard":
+        this._updateScoreboard(entry, d);
+        break;
       case "timer":
         entry.labelEl.textContent = d.label ? this._titleCase(d.label) : "";
         this._updateTimer(entry, d);
@@ -474,6 +491,64 @@ Module.register("MMM-AI-Jarvis", {
       default:
         break;
     }
+  },
+
+  /**
+   * Several games at once: one compact row per game, grouped by league,
+   * live games first. Scores that change since the last refresh flash.
+   */
+  _updateScoreboard(entry, d) {
+    const games = d.games ?? [];
+    entry.el.classList.toggle("is-live", d.live > 0);
+    entry.labelEl.textContent = d.title || "Scores";
+    entry.statusEl.replaceChildren();
+    if (d.live > 0) entry.statusEl.append(this._el("span", "jv-live-dot"), document.createTextNode(`${d.live} live`));
+    else entry.statusEl.textContent = games.some((g) => g.state === "pre") ? "Up next" : "Final";
+
+    const leagues = new Set(games.map((g) => g.league?.name));
+    const rows = [];
+    let lastLeague = null;
+    for (const g of games) {
+      if (leagues.size > 1 && g.league?.name !== lastLeague) {
+        lastLeague = g.league?.name;
+        rows.push(this._el("div", "jv-board-league", lastLeague ?? ""));
+      }
+      const row = this._el("div", `jv-board-row is-${g.state}`);
+      const side = (team, home) => {
+        const wrap = this._el("span", `jv-board-team${home ? " is-home" : ""}`);
+        const logo = this._el("img", "jv-board-logo");
+        logo.alt = "";
+        logo.referrerPolicy = "no-referrer";
+        logo.onerror = () => logo.classList.add("is-missing");
+        if (team.logo) logo.src = team.logo;
+        else logo.classList.add("is-missing");
+        const abbr = this._el("span", "jv-board-abbr", team.abbr || team.short || team.name);
+        wrap.append(...(home ? [abbr, logo] : [logo, abbr]));
+        return wrap;
+      };
+      const mid = this._el("span", "jv-board-score");
+      if (g.state === "pre") {
+        mid.classList.add("is-time");
+        mid.textContent = this._formatKickoff(g.date).replace(/^Today · /, "");
+      } else {
+        const a = Number(g.away.score);
+        const h = Number(g.home.score);
+        const key = `${g.league?.key}:${g.id}`;
+        const text = `${g.away.score}–${g.home.score}`;
+        mid.append(
+          this._el("span", a > h ? "is-ahead" : "", g.away.score),
+          this._el("span", "jv-board-dash", "–"),
+          this._el("span", h > a ? "is-ahead" : "", g.home.score),
+        );
+        const previous = entry.scores.get(key);
+        if (previous !== undefined && previous !== text) this._restartAnimation(mid, "jv-flash");
+        entry.scores.set(key, text);
+      }
+      const status = this._el("span", "jv-board-status", g.state === "post" ? "Final" : g.state === "in" ? this._formatGameStatus(g.detail) : "");
+      row.append(side(g.away, false), mid, side(g.home, true), status);
+      rows.push(row);
+    }
+    entry.listEl.replaceChildren(...rows);
   },
 
   _tick() {
@@ -545,6 +620,15 @@ Module.register("MMM-AI-Jarvis", {
     return inner;
   },
 
+  /** ESPN's "10.0 - 1st" / "8:19 - 3rd" → "0:10 · 1st" / "8:19 · 3rd". */
+  _formatGameStatus(detail) {
+    const text = String(detail ?? "");
+    const m = /^(\d+(?:\.\d+)?|\d+:\d{2}) - (.+)$/.exec(text);
+    if (!m) return text;
+    const clock = m[1].includes(":") ? m[1] : `0:${String(Math.ceil(Number(m[1]))).padStart(2, "0")}`;
+    return `${clock} · ${m[2]}`;
+  },
+
   _formatKickoff(date) {
     if (!date) return "";
     const d = new Date(date);
@@ -590,7 +674,7 @@ Module.register("MMM-AI-Jarvis", {
 
   /**
    * Fade out the modules in display.autoHide (e.g. compliments, which shares
-   * the lower third with Jarvis) while Jarvis has something on screen, and
+   * the lower third with Iris) while Iris has something on screen, and
    * bring them back once it is idle with nothing showing.
    */
   _updateAutoHide() {
@@ -619,19 +703,19 @@ Module.register("MMM-AI-Jarvis", {
       for (const id of ids) {
         const m = byId(id);
         if (!m || m === this) continue;
-        this.hiddenByJarvis.add(id);
+        this.hiddenByIris.add(id);
         m.hide(600, done, options);
       }
     } else if (action === "show") {
       for (const id of ids) {
         const m = byId(id);
         if (!m) continue;
-        this.hiddenByJarvis.delete(id);
+        this.hiddenByIris.delete(id);
         m.show(600, done, options);
       }
     } else if (action === "restore") {
-      for (const id of this.hiddenByJarvis) byId(id)?.show(600, done, options);
-      this.hiddenByJarvis.clear();
+      for (const id of this.hiddenByIris) byId(id)?.show(600, done, options);
+      this.hiddenByIris.clear();
     }
   },
 
@@ -644,7 +728,7 @@ Module.register("MMM-AI-Jarvis", {
       case "STATE":
         this.state = payload;
         this._renderState();
-        this.sendNotification("JARVIS_STATE", { state: payload });
+        this.sendNotification("IRIS_STATE", { state: payload });
         if (payload === "idle") this._scheduleClear();
         this._updateAutoHide();
         break;
@@ -653,7 +737,7 @@ Module.register("MMM-AI-Jarvis", {
         break;
       case "RESPONSE":
         this._showReply(payload);
-        this.sendNotification("JARVIS_RESPONSE", { text: payload });
+        this.sendNotification("IRIS_RESPONSE", { text: payload });
         break;
       case "WIDGETS":
         this._renderWidgets(Array.isArray(payload) ? payload : []);
@@ -681,11 +765,13 @@ Module.register("MMM-AI-Jarvis", {
       case "DOM_OBJECTS_CREATED":
         this._reportModules();
         break;
-      case "JARVIS_ASK": {
+      case "IRIS_ASK":
+      case "JARVIS_ASK": { // pre-IRIS name, still accepted
         const text = typeof payload === "string" ? payload : payload?.text;
         if (text) this.sendSocketNotification("ASK", text);
         break;
       }
+      case "IRIS_STOP":
       case "JARVIS_STOP":
         this.sendSocketNotification("STOP");
         break;
@@ -727,6 +813,17 @@ Module.register("MMM-AI-Jarvis", {
         weatherType: f.weatherType ?? null,
         windSpeed: f.windSpeed ?? null,
       }));
+    }
+    // Hourly rows (date is epoch ms since 2.38) let "tonight" and "tomorrow morning" be answered properly.
+    const hourly = Array.isArray(payload.hourlyArray) ? payload.hourlyArray : null;
+    if (hourly?.length) {
+      next.hourly = hourly.slice(0, 48).map((h) => ({
+        time: Number(h.date) || null,
+        temperature: h.temperature ?? null,
+        precipitationProbability: h.precipitationProbability ?? null,
+        weatherType: h.weatherType ?? null,
+        windSpeed: h.windSpeed ?? null,
+      })).filter((h) => h.time);
     }
 
     this.weatherSummary = next;

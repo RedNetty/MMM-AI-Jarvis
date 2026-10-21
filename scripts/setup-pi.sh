@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
 #
-# MMM-AI-Jarvis — local AI stack installer
+# MMM-AI-Jarvis (IRIS) — local AI stack installer
 #
-# Installs everything Jarvis needs to run fully on-device, with no cloud APIs:
+# Installs everything IRIS needs to run fully on-device, with no cloud APIs:
 #   • Ollama + a vision/tool-capable model    (the "brain" and the eyes)
 #   • whisper.cpp server as a systemd service  (speech-to-text)
 #   • Piper voice server as a systemd service  (text-to-speech)
 #   • ALSA utils, espeak-ng, fswebcam          (mic/speaker, fallback voice, USB webcam)
 #
 # Supported targets: Raspberry Pi OS 64-bit (Bookworm/Trixie) on Pi 5 / Pi 4,
-# and Debian/Ubuntu x86_64. Re-running is safe; finished steps are skipped.
+# and Debian/Ubuntu x86_64. Re-running is safe; finished steps are skipped,
+# and an install made under the old "Jarvis" name is moved over.
 #
 # Usage: scripts/setup-pi.sh [options]
 #   --model NAME          Ollama model (default: qwen3.5:2b, the fastest; qwen3.5:4b is smarter but slower)
 #   --whisper-model NAME  whisper.cpp model (default: tiny.en, the fastest; base.en for noisy rooms;
 #                         "tiny" or "base" for languages other than English)
-#   --voice NAME          Piper voice (default: en_GB-alan-medium)
+#   --voice NAME          Piper voice (default: en_US-lessac-medium)
 #   --whisper-port PORT   Port for the whisper server (default: 8178)
 #   --piper-port PORT     Port for the Piper voice server (default: 5005)
 #   --brain HOST          A Mac (or PC) on your network set up with setup-mac.sh --share,
-#                         e.g. macbook.local. Jarvis uses it first and falls back to this Pi.
+#                         e.g. macbook.local. IRIS uses it first (including its natural Kokoro
+#                         voice) and falls back to this Pi.
 #   --no-ollama           Skip Ollama on the Pi (no local fallback when the brain is off)
 #   --no-whisper          Skip whisper.cpp
 #   --no-piper            Skip Piper
@@ -29,7 +31,7 @@ set -euo pipefail
 
 MODEL="qwen3.5:2b"
 WHISPER_MODEL="tiny.en"
-VOICE="en_GB-alan-medium"
+VOICE="en_US-lessac-medium"
 WHISPER_PORT=8178
 PIPER_PORT=5005
 DO_OLLAMA=1
@@ -37,10 +39,11 @@ DO_WHISPER=1
 DO_PIPER=1
 BRAIN=""
 
-JARVIS_HOME="${HOME}/.local/share/jarvis"
-WHISPER_DIR="${JARVIS_HOME}/whisper.cpp"
-PIPER_VENV="${JARVIS_HOME}/piper-venv"
-VOICE_DIR="${JARVIS_HOME}/voices"
+IRIS_HOME="${HOME}/.local/share/iris"
+LEGACY_HOME="${HOME}/.local/share/jarvis"
+WHISPER_DIR="${IRIS_HOME}/whisper.cpp"
+PIPER_VENV="${IRIS_HOME}/piper-venv"
+VOICE_DIR="${IRIS_HOME}/voices"
 
 bold() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
@@ -87,6 +90,16 @@ EOF
   sudo systemctl restart "$name"
 }
 
+# Stop and remove a systemd service (used for the services of the old "Jarvis" install).
+remove_service() {
+  local name="$1"
+  [[ -f "/etc/systemd/system/${name}.service" ]] || return 0
+  sudo systemctl disable --now "$name" >/dev/null 2>&1 || true
+  sudo rm -f "/etc/systemd/system/${name}.service"
+  sudo systemctl daemon-reload
+  info "Removed old service ${name}"
+}
+
 wait_for_http() {
   local url="$1" seconds="$2"
   for _ in $(seq 1 "$seconds"); do
@@ -114,10 +127,23 @@ if [[ "$MODEL" == *4b* || "$MODEL" == *9b* ]] && (( MEM_GB < 6 )); then
 fi
 THREADS=$(nproc)
 
-bold "MMM-AI-Jarvis local setup"
+bold "IRIS local setup (MMM-AI-Jarvis)"
 info "RAM: ${MEM_GB} GB · CPU threads: ${THREADS} · Arch: ${ARCH}"
 info "LLM: ${MODEL} · Whisper: ${WHISPER_MODEL} · Voice: ${VOICE}"
-mkdir -p "$JARVIS_HOME" "$VOICE_DIR"
+
+# ── Move an install made under the old name ───────────────────────────────────
+
+remove_service jarvis-whisper
+remove_service jarvis-piper
+sudo rm -f /etc/systemd/system/ollama.service.d/jarvis.conf
+if [[ -d "$LEGACY_HOME" && ! -L "$LEGACY_HOME" && ! -e "$IRIS_HOME" ]]; then
+  bold "Moving ${LEGACY_HOME} to ${IRIS_HOME}"
+  mkdir -p "$(dirname "$IRIS_HOME")"
+  mv "$LEGACY_HOME" "$IRIS_HOME"
+  ln -s "$IRIS_HOME" "$LEGACY_HOME"  # old config paths keep working
+  rm -rf "${WHISPER_DIR}/build"      # the build caches its own path; rebuild below
+fi
+mkdir -p "$IRIS_HOME" "$VOICE_DIR"
 
 # ── System packages ───────────────────────────────────────────────────────────
 
@@ -147,7 +173,7 @@ if (( DO_OLLAMA )); then
 
   # One model in memory at a time keeps RAM predictable on a Pi.
   sudo mkdir -p /etc/systemd/system/ollama.service.d
-  sudo tee /etc/systemd/system/ollama.service.d/jarvis.conf >/dev/null <<EOF
+  sudo tee /etc/systemd/system/ollama.service.d/iris.conf >/dev/null <<EOF
 [Service]
 Environment="OLLAMA_NUM_PARALLEL=1"
 Environment="OLLAMA_MAX_LOADED_MODELS=1"
@@ -185,8 +211,8 @@ if (( DO_WHISPER )); then
   fi
   [[ -f "$WHISPER_MODEL_FILE" ]] || die "Whisper model download failed."
 
-  info "Installing jarvis-whisper service on 127.0.0.1:${WHISPER_PORT}…"
-  install_service jarvis-whisper "whisper.cpp speech-to-text server for MMM-AI-Jarvis" \
+  info "Installing iris-whisper service on 127.0.0.1:${WHISPER_PORT}…"
+  install_service iris-whisper "whisper.cpp speech-to-text server for IRIS (MMM-AI-Jarvis)" \
     "${WHISPER_BIN} -m ${WHISPER_MODEL_FILE} --host 127.0.0.1 --port ${WHISPER_PORT} -t ${THREADS}"
 fi
 
@@ -199,9 +225,9 @@ if (( DO_PIPER )); then
   # The [http] extra adds the persistent voice server (keeps the voice loaded: ~0.2s per sentence instead of ~3s).
   "${PIPER_VENV}/bin/pip" install -q --upgrade "piper-tts[http]"
 
-  # Voice names look like en_GB-alan-medium → en/en_GB/alan/medium/
+  # Voice names look like en_US-lessac-medium → en/en_US/lessac/medium/
   IFS='-' read -r V_LOCALE V_NAME V_QUALITY <<<"$VOICE"
-  [[ -n "${V_LOCALE:-}" && -n "${V_NAME:-}" && -n "${V_QUALITY:-}" ]] || die "Voice must look like en_GB-alan-medium."
+  [[ -n "${V_LOCALE:-}" && -n "${V_NAME:-}" && -n "${V_QUALITY:-}" ]] || die "Voice must look like en_US-lessac-medium."
   V_LANG="${V_LOCALE%%_*}"
   V_URL="https://huggingface.co/rhasspy/piper-voices/resolve/main/${V_LANG}/${V_LOCALE}/${V_NAME}/${V_QUALITY}/${VOICE}"
 
@@ -214,22 +240,22 @@ if (( DO_PIPER )); then
     fi
   done
 
-  info "Installing jarvis-piper service on 127.0.0.1:${PIPER_PORT}…"
-  install_service jarvis-piper "Piper voice server for MMM-AI-Jarvis" \
+  info "Installing iris-piper service on 127.0.0.1:${PIPER_PORT}…"
+  install_service iris-piper "Piper voice server for IRIS (MMM-AI-Jarvis)" \
     "${PIPER_VENV}/bin/python -m piper.http_server -m ${VOICE_DIR}/${VOICE}.onnx --host 127.0.0.1 --port ${PIPER_PORT}"
 
   info "Testing the voice…"
   if wait_for_http "http://127.0.0.1:${PIPER_PORT}/" 30; then
     TEST_WAV="$(mktemp --suffix=.wav)"
     if curl -fsS -o "$TEST_WAV" -X POST "http://127.0.0.1:${PIPER_PORT}/synthesize" \
-         -H 'Content-Type: application/json' -d '{"text": "Hello, I am Jarvis. Setup is almost done."}'; then
+         -H 'Content-Type: application/json' -d '{"text": "Hi, I am Iris. Setup is almost done."}'; then
       aplay -q "$TEST_WAV" 2>/dev/null || warn "Voice works, but playback failed. Check your speaker with: speaker-test -t wav -c 2"
     else
-      warn "The Piper server did not synthesise speech. Check: journalctl -u jarvis-piper"
+      warn "The Piper server did not synthesise speech. Check: journalctl -u iris-piper"
     fi
     rm -f "$TEST_WAV"
   else
-    warn "The Piper server did not start. Check: journalctl -u jarvis-piper (Jarvis will fall back to the piper CLI)."
+    warn "The Piper server did not start. Check: journalctl -u iris-piper (IRIS will fall back to the piper CLI)."
   fi
 fi
 
@@ -241,11 +267,11 @@ if (( DO_OLLAMA )); then
 fi
 if (( DO_WHISPER )); then
   wait_for_http "http://127.0.0.1:${WHISPER_PORT}" 20 && info "whisper.cpp ....... OK" \
-    || warn "whisper.cpp ....... not responding (journalctl -u jarvis-whisper)"
+    || warn "whisper.cpp ....... not responding (journalctl -u iris-whisper)"
 fi
 if (( DO_PIPER )); then
   curl -fsS -o /dev/null "http://127.0.0.1:${PIPER_PORT}/" && info "Piper ............. OK" \
-    || warn "Piper ............. not responding (journalctl -u jarvis-piper)"
+    || warn "Piper ............. not responding (journalctl -u iris-piper)"
 fi
 arecord -l 2>/dev/null | grep -q '^card' && info "Microphone ........ found" || warn "Microphone ........ none found (arecord -l)"
 
@@ -262,9 +288,17 @@ if [[ -n "$BRAIN" ]]; then
   if (( DO_OLLAMA )); then
     LOCAL_LLM=$'\n'"          { url: \"http://127.0.0.1:11434\", model: \"${MODEL}\" },"
   fi
+  if curl -fsS -o /dev/null --max-time 3 "http://${BRAIN}:5006/"; then
+    info "Kokoro voice on ${BRAIN} OK"
+  else
+    warn "Can't reach the Kokoro voice on ${BRAIN} yet; this Pi's Piper voice speaks until it's up."
+  fi
+  # The Mac's natural Kokoro voice first; this Pi's Piper voice whenever the Mac is off.
   BRAIN_CONFIG="      stt: { whisperUrl: [\"http://${BRAIN}:8178\", \"http://127.0.0.1:${WHISPER_PORT}\"] },
       tts: {
-        piperUrl: [\"http://${BRAIN}:5005\", \"http://127.0.0.1:${PIPER_PORT}\"],
+        provider: \"kokoro\",
+        kokoroUrl: \"http://${BRAIN}:5006\",
+        piperUrl: \"http://127.0.0.1:${PIPER_PORT}\",
         piperModel: \"${VOICE_DIR}/${VOICE}.onnx\",
       },
       llm: {
@@ -294,5 +328,6 @@ ${BRAIN_CONFIG}
     },
   },
 
-Then restart MagicMirror and say "Jarvis, what should I wear today?"
+If your config still has wakeWord: "jarvis" from before, remove it (or set "iris").
+Then restart MagicMirror and say "Iris, what should I wear today?"
 EOF

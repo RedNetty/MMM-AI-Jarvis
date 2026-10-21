@@ -2,6 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+
+// Replies pick among phrasings at random; tests always get the first one.
+require("../lib/speech/talk").random = () => 0;
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -18,7 +21,7 @@ const { parseDuration, formatDuration } = require("../lib/text");
 
 const tick = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ESPN scoreboard event, trimmed to the fields Jarvis uses.
+// ESPN scoreboard event, trimmed to the fields Iris uses.
 const EVENT = {
   id: "401",
   date: "2026-10-24T14:00Z",
@@ -35,16 +38,23 @@ const EVENT = {
 
 test("Sports: query parsing, team matching and normalisation", () => {
   const s = new Sports();
-  assert.deepEqual(s.parseQuery("what's the score of the Arsenal game"), { team: "arsenal", leagueKeys: s.leagues });
-  assert.deepEqual(s.parseQuery("man city premier league score"), { team: "man city", leagueKeys: ["epl"] });
+  assert.deepEqual(s.parseQuery("what's the score of the Arsenal game"), { team: "arsenal", leagueKeys: s.leagues, named: false });
+  assert.deepEqual(s.parseQuery("man city premier league score"), { team: "man city", leagueKeys: ["epl"], named: true });
   assert.equal(s.parseQuery("how are the broncos doing").team, "broncos");
+  assert.deepEqual(s.parseQuery("what sports games are going on right now"), { team: "", leagueKeys: s.leagues, named: false });
+  assert.deepEqual(s.parseQuery("any NBA games on tonight"), { team: "", leagueKeys: ["nba"], named: true });
+  assert.deepEqual(s.parseQuery("is there any soccer on").leagueKeys, ["epl", "mls", "ucl", "laliga", "bundesliga", "seriea"]);
 
   const game = Sports.normalizeEvent(EVENT, "epl");
   assert.equal(game.state, "in");
   assert.equal(game.home.score, "2");
   assert.equal(game.league.name, "Premier League");
-  assert.equal(s.describe(game), "Arsenal 2, Everton 1, 67'.");
-  assert.equal(s.describe({ ...game, state: "post" }), "Final score: Arsenal 2, Everton 1.");
+  const now = new Date(Date.parse(EVENT.date) + 30 * 60e3);
+  assert.equal(s.describe(game, { now }), "Arsenal lead Everton 2-1 in the 67th minute.");
+  assert.equal(s.describe({ ...game, state: "post" }, { now }), "Arsenal beat Everton 2-1.");
+  assert.equal(s.describe({ ...game, home: { ...game.home, score: "1" } }, { now }), "Arsenal and Everton are level at 1 in the 67th minute.");
+  const kickoff = new Date(2026, 9, 24, 15, 0).toISOString();
+  assert.equal(s.describe({ ...game, state: "pre", date: kickoff }, { now: new Date(2026, 9, 23, 15, 0) }), "Everton play Arsenal tomorrow at 3 PM.");
 
   assert.equal(Sports.matchScore("arsenal", game.home), 2);
   assert.equal(Sports.matchScore("ars", game.home), 2);
@@ -121,7 +131,7 @@ test("Screen: module matching and commands", () => {
 });
 
 function buildSkills({ sports = null, screen = new Screen() } = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-display-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "iris-display-"));
   const widgets = new Widgets({ max: 4 });
   const skills = new Skills({
     ollama: {},
@@ -133,7 +143,7 @@ function buildSkills({ sports = null, screen = new Screen() } = {}) {
     sports,
     widgets,
     screen,
-    config: { assistantName: "Jarvis", display: { cardTimeout: 60000, infoTimeout: 60000, snapshotTimeout: 8000 } },
+    config: { assistantName: "Iris", display: { cardTimeout: 60000, infoTimeout: 60000, snapshotTimeout: 8000 } },
   });
   return { skills, widgets, screen };
 }
@@ -141,14 +151,13 @@ function buildSkills({ sports = null, screen = new Screen() } = {}) {
 test("Skills: live scoreboard widget refreshes and lingers after full time", async () => {
   let state = "in";
   const game = Sports.normalizeEvent(EVENT, "epl");
-  const fakeSports = {
+  const fakeSports = Object.assign(new Sports(), {
     findGame: async (team) => (team === "arsenal" ? game : null),
     getGame: async () => ({ ...game, state, home: { ...game.home, score: "3" } }),
-    describe: (g) => new Sports().describe(g),
-  };
+  });
   const { skills, widgets } = buildSkills({ sports: fakeSports });
 
-  assert.equal((await skills.showScore("arsenal")).spoken, "Arsenal 2, Everton 1, 67'.");
+  assert.equal((await skills.showScore("arsenal")).spoken, "Arsenal lead Everton 2-1 in the 67th minute.");
   assert.equal((await skills.showScore("nobody")).spoken, "I couldn't find a game for nobody.");
   const w = widgets.list("score")[0];
   assert.equal(w.key, "score:epl:401");
@@ -172,9 +181,9 @@ test("Skills: timers, info panels, and hiding cards vs modules", () => {
   screen.setInventory([{ id: "m1", name: "newsfeed", position: "bottom_bar" }]);
   const { skills, widgets } = buildSkills({ screen });
 
-  assert.equal(skills.setTimer(600, "pasta").spoken, "Pasta timer set for 10 minutes.");
+  assert.equal(skills.setTimer(600, "pasta").spoken, "Pasta timer, 10 minutes.");
   assert.equal(skills.setTimer(0).spoken, "How long should the timer be?");
-  assert.match(skills.timeLeft().spoken, /^(10 minutes|9 minutes 59 seconds) left on the pasta timer\.$/);
+  assert.equal(skills.timeLeft().spoken, "About 10 minutes left on the pasta.");
 
   skills.showInfo({ title: "**Pancakes**", lines: ["1. Mix flour", "- Add eggs 🥚", ""] });
   const info = widgets.list("info")[0].data;
@@ -186,7 +195,7 @@ test("Skills: timers, info panels, and hiding cards vs modules", () => {
   assert.deepEqual(commands, [{ action: "hide", ids: ["m1"] }]);
   assert.equal(skills.hideOnScreen("everything").spoken, "There's nothing of mine on the screen.");
   assert.equal(widgets.list("timer").length, 1, "clearing cards keeps running timers");
-  assert.equal(skills.cancelTimer("pasta").spoken, "Timer cancelled.");
+  assert.equal(skills.cancelTimer("pasta").spoken, "Okay, pasta timer cancelled.");
   assert.equal(skills.cancelTimer().spoken, "There's no timer running.");
   widgets.stop();
 });

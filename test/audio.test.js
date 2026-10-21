@@ -111,7 +111,7 @@ test("jpegSize reads SOF dimensions", () => {
 test("Whisper output cleaning removes non-speech and hallucinations", () => {
   assert.equal(WhisperCppSTT.clean(" [BLANK_AUDIO] "), "");
   assert.equal(WhisperCppSTT.clean("(music) Thank you."), "");
-  assert.equal(WhisperCppSTT.clean(" Jarvis, what time is it? [ Silence ]"), "Jarvis, what time is it?");
+  assert.equal(WhisperCppSTT.clean(" Iris, what time is it? [ Silence ]"), "Iris, what time is it?");
 });
 
 const SpeechQueue = require("../lib/audio/SpeechQueue");
@@ -200,7 +200,7 @@ test("macOS: microphone and camera use ffmpeg with AVFoundation", () => {
 
 test("macOS: speaker plays through afplay from a temporary file", async () => {
   // Stand-in afplay that records the file it was given.
-  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "jarvis-bin-"));
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "iris-bin-"));
   const record = path.join(bin, "played");
   fs.writeFileSync(path.join(bin, "afplay"), `#!/bin/sh\ncp "$1" "${record}"\n`, { mode: 0o755 });
   const PATH = process.env.PATH;

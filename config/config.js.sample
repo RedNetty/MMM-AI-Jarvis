@@ -1,5 +1,5 @@
 /**
- * MMM-AI-Jarvis — sample configuration
+ * MMM-AI-Jarvis (IRIS: Image Recognition & Intelligent Speech) — sample configuration
  *
  * Copy the object below into the `modules: [ … ]` array of
  * ~/MagicMirror/config/config.js. Every option is optional; the values shown
@@ -8,16 +8,16 @@
  * other llm option.
  *
  * Everything runs locally: whisper.cpp (speech-to-text), Ollama (language +
- * vision model) and Piper (voice). See README.md for setup.
+ * vision model) and Kokoro or Piper (voice). See README.md for setup.
  */
 {
   module: "MMM-AI-Jarvis",
   position: "lower_third",                       // middle_center and bottom_center also work well
   config: {
     // ── Identity ───────────────────────────────────────────────────────────
-    assistantName: "Jarvis",
-    wakeWord: "jarvis",                          // say this first, e.g. "Jarvis, what should I wear?"
-    wakeWordAliases: ["jervis", "jarvus", "javis"], // common mis-hearings that also count
+    assistantName: "Iris",
+    wakeWord: "iris",                            // say this first, e.g. "Iris, what should I wear?"
+    wakeWordAliases: ["aris", "irus", "iras", "eyeris"], // mis-hearings that also count
     userName: "",                                // personalises replies, e.g. "Alex"
     language: "en",                              // Whisper language code ("en", "de", "fr", "es", …)
     locale: null,                                // date/time format; null = MagicMirror's `locale`
@@ -33,10 +33,13 @@
 
     // ── Text-to-speech ─────────────────────────────────────────────────────
     tts: {
-      provider: "piper",                         // "piper" (natural) | "espeak" (robotic, zero setup)
+      provider: "piper",                         // "kokoro" (most natural; on a Mac/PC, Piper as fallback) | "piper" | "espeak" (robotic)
+      kokoroUrl: "",                             // Kokoro voice server, e.g. "http://macbook.local:5006" (setup-mac.sh installs it)
+      kokoroVoice: "af_heart",                   // af_heart, af_bella, am_michael, am_adam, bf_emma, bm_george, …
+      kokoroSpeed: null,                         // 1.1 = a little faster
       piperUrl: "http://127.0.0.1:5005",         // persistent Piper server (fast); a list for failover; "" = CLI only
-      piperCommand: "~/.local/share/jarvis/piper-venv/bin/piper",       // CLI fallback
-      piperModel: "~/.local/share/jarvis/voices/en_GB-alan-medium.onnx", // CLI fallback voice
+      piperCommand: "~/.local/share/iris/piper-venv/bin/piper",          // CLI fallback
+      piperModel: "~/.local/share/iris/voices/en_US-lessac-medium.onnx", // CLI fallback voice
       piperSpeaker: null,                        // speaker id for multi-speaker voices
       piperLengthScale: null,                    // speaking speed: 0.9 = faster, 1.1 = slower
       piperArgs: [],                             // extra CLI args passed to piper
@@ -72,10 +75,12 @@
       vadThreshold: 500,                         // minimum loudness counted as speech (raise if noise triggers it)
       noiseMultiplier: 3,                        // speech must be this many × louder than room noise
       silenceMs: 750,                            // pause that ends a sentence (lower = snappier, may cut slow talkers off)
+      pauseMs: 300,                              // transcribe at the first short pause; "Iris." alone or a finished
+                                                 // question is answered without waiting out silenceMs (0 = off)
       preRollMs: 400,                            // audio kept from just before speech started
       minUtteranceMs: 350,
       maxUtteranceMs: 15000,
-      allowBargeIn: true,                        // "Jarvis, stop" while speaking; set false if Jarvis hears itself
+      allowBargeIn: true,                        // "Iris, stop" while speaking (its own voice is filtered out)
       chime: true,                               // soft tone when the wake word is heard on its own
       chimeVolume: 0.25,
     },
@@ -95,7 +100,8 @@
 
     // ── Weather for outfit planning ────────────────────────────────────────
     // Leave null to reuse MagicMirror's built-in weather module (no extra calls).
-    // Set coordinates to fetch from Open-Meteo instead (free, no API key).
+    // Set coordinates to fetch from Open-Meteo instead (free, no API key, and adds the hourly
+    // detail behind answers about "tonight" or "tomorrow morning").
     weather: {
       latitude: null,
       longitude: null,
@@ -125,7 +131,7 @@
 
     // ── Conversation ───────────────────────────────────────────────────────
     conversation: {
-      listenTimeout: 8000,                       // after "Jarvis" alone, how long to wait for the question
+      listenTimeout: 8000,                       // after "Iris" alone, how long to wait for the question
       followUpWindow: 8000,                      // reply without the wake word for this long after an answer (0 = off)
       historyTurns: 6,                           // remembered exchanges within a conversation
       resetAfter: 300000,                        // start a fresh conversation after 5 idle minutes
@@ -138,11 +144,11 @@
       clearAfter: 30000,                         // hide the conversation after this long idle (0 = never)
       maxWidgets: 4,                             // cards on screen at once (running timers are never dropped)
       cardTimeout: 90000,                        // outfit / wardrobe cards
-      infoTimeout: 180000,                       // info panels Jarvis puts on screen
+      infoTimeout: 180000,                       // info panels Iris puts on screen
       snapshotTimeout: 8000,                     // camera preview
       errorTimeout: 6000,
       showProblems: true,                        // show setup problems (e.g. Ollama not running) on the mirror
-      autoHide: ["compliments"],                 // modules faded out while Jarvis is showing something
+      autoHide: ["compliments"],                 // modules faded out while Iris is showing something
     },
   },
 }

@@ -1,7 +1,7 @@
 {
   "name": "MMM-AI-Jarvis",
-  "version": "3.0.0",
-  "description": "Private, on-device voice assistant and personal stylist for MagicMirror² — local speech, local LLM with vision, wardrobe memory and weather-aware outfit suggestions.",
+  "version": "3.1.0",
+  "description": "IRIS (Image Recognition & Intelligent Speech): a private, on-device voice assistant and personal stylist for MagicMirror² — local speech, a natural local voice, a local LLM with vision, live sports, wardrobe memory and weather-aware outfits.",
   "main": "node_helper.js",
   "license": "MIT",
   "author": "RedNetty",
@@ -13,12 +13,16 @@
     "magicmirror",
     "magicmirror2",
     "voice-assistant",
+    "iris",
     "ollama",
     "whisper",
+    "kokoro",
     "piper",
     "raspberry-pi",
+    "apple-silicon",
     "wardrobe",
-    "outfit"
+    "outfit",
+    "sports-scores"
   ],
   "engines": {
     "node": ">=20.3"

@@ -1,18 +1,27 @@
-# MMM-AI-Jarvis
+# IRIS for MagicMirror² (MMM-AI-Jarvis)
 
-A private, voice-controlled assistant and personal stylist for [MagicMirror²](https://magicmirror.builders/).
-Talk to your mirror, and Jarvis answers out loud and puts things on the screen: live sports scores,
-timers, lists, and outfits picked from **your own wardrobe** for today's weather. It can see you
-through a camera, remember your clothes and your preferences, and show, hide or rearrange the other
-modules on your mirror.
+**IRIS: Image Recognition & Intelligent Speech.** A private, voice-controlled assistant and personal
+stylist for [MagicMirror²](https://magicmirror.builders/). Say *"Iris…"* and it answers out loud in a
+natural voice and puts things on the mirror:
+
+- live scores, including every game on right now
+- timers, lists, and the time anywhere in the world
+- outfits picked from **your own wardrobe** for the weather, whether that's now, tonight or tomorrow morning
+
+It can see you through a camera, remember your clothes and your preferences, and show, hide or
+rearrange the other modules on your mirror.
 
 **Everything runs on your own hardware.** Speech recognition, the language and vision model, and the
 voice are all local. There are no cloud accounts, no API keys and no usage bills, and your camera
 images never leave the house.
 
-<p align="center"><img src="docs/screenshot.png" width="440" alt="Jarvis on a MagicMirror showing an outfit suggestion, a live Premier League score and a pasta timer"></p>
+<p align="center"><img src="docs/screenshot.png" width="440" alt="IRIS on a MagicMirror showing an outfit suggestion, a live Premier League score and a pasta timer"></p>
 
 <p align="center"><a href="#screenshots">Screenshots of every feature</a> · <a href="docs/ui-gallery.png">All states and cards</a></p>
+
+> The module folder is still `MMM-AI-Jarvis` (the repository name), so existing installs and
+> configs keep working. Only the assistant itself is now called IRIS. See
+> [Coming from "Jarvis"](#coming-from-jarvis).
 
 ---
 
@@ -23,7 +32,7 @@ images never leave the house.
 - [Screenshots](#screenshots)
 - [Hardware](#hardware)
 - [Installation](#installation)
-- [Running on a Mac (fastest)](#running-on-a-mac-fastest)
+- [Running on a Mac (fastest, best voice)](#running-on-a-mac-fastest-best-voice)
 - [Things to say](#things-to-say)
 - [Building your wardrobe](#building-your-wardrobe)
 - [Controlling the mirror](#controlling-the-mirror)
@@ -31,7 +40,7 @@ images never leave the house.
 - [Notifications API](#notifications-api)
 - [Privacy](#privacy)
 - [Troubleshooting](#troubleshooting)
-- [Upgrading from v2](#upgrading-from-v2)
+- [Coming from "Jarvis"](#coming-from-jarvis)
 - [Development](#development)
 
 ---
@@ -40,59 +49,98 @@ images never leave the house.
 
 | | |
 |---|---|
-| 🎙️ **Hands-free voice** | Wake word ("Jarvis…"), follow-up questions without repeating it, "stop" to interrupt |
-| 👗 **Wardrobe memory** | Hold clothes up to the mirror and say "add this to my wardrobe". Jarvis photographs, names and catalogues them |
-| 🌦️ **Outfit planning** | "What should I wear today?" picks a coordinated outfit from your wardrobe based on the weather, the occasion, what you wore recently and what you like |
+| 🎙️ **Hands-free voice** | Say "Iris…" and ask; follow up without repeating it; say "stop" to interrupt. Answers as soon as you finish a sentence, and never mistakes its own voice for yours |
+| 🗣️ **A natural voice** | [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) on a Mac (Piper on a Pi). Times, scores, dates and units are spoken the way people say them ("six forty-six", "two thirty-one left in the fourth quarter") |
+| 🕰️ **Time that makes sense** | "What time is it in Tokyo?", "How long until Christmas?", "What day is Halloween?", "How many days until my birthday?" Exact answers, phrased like a person: "tonight at 7", "in 25 minutes", "tomorrow morning" |
+| 👗 **Wardrobe memory** | Hold clothes up to the mirror and say "add this to my wardrobe". IRIS photographs, names and catalogues them |
+| 🌦️ **Outfit planning** | "What should I wear to dinner tonight?" picks a coordinated outfit from your wardrobe for *tonight's* weather, the occasion, what you wore recently and what you like |
 | 👀 **Vision** | "How do I look?" / "Does this match?" gets honest feedback from the camera |
-| 🏆 **Live scores** | "What's the score of the Arsenal game?" pins a scoreboard that updates live (NFL, NBA, MLB, NHL, Premier League, Champions League, MLS and more) |
+| 🏆 **Live sports** | "What games are on right now?" shows a live scoreboard of every game across your leagues. "How are the Lakers doing?" pins one game that updates live. Covers the NFL, NBA, MLB, NHL, Premier League, Champions League, MLS and more |
 | ⏱️ **Timers** | "Set a pasta timer for 10 minutes" shows a countdown and announces when it's done |
 | 🪞 **Screen control** | "Hide the news", "show the calendar", "focus mode", "clear the screen", plus your own voice commands for any module |
-| 📋 **Info panels** | Ask for a list, steps or a summary and Jarvis puts it on screen |
+| 📋 **Info panels** | Ask for a list, steps or a summary and IRIS puts it on screen |
 | 🧠 **Long-term memory** | "Remember that my office is business casual" is kept across restarts and used in every answer |
-| 🔒 **100% local** | whisper.cpp + Ollama + Piper. No cloud, no keys |
+| 🔒 **100% local** | whisper.cpp + Ollama + Kokoro/Piper. No cloud, no keys |
 
 ## How it works
 
 ```
  microphone ─► voice activity detection ─► whisper.cpp ─► wake word ─┐
-                (only speech is transcribed)  (speech-to-text)        │
-                                                                      ▼
-                                       ┌──────────── fast intents (scores, timers, outfits,
-                                       │             screen control, memory) – no LLM needed
+               (speech only; transcribing  (speech-to-text)          │  its own voice is filtered out
+                starts at the first pause)                           ▼
+                                       ┌──────────── fast intents: time, weather, scores, timers,
+                                       │             outfits, screen, memory (no LLM needed)
                                        ▼
                                  Ollama (qwen3.5) ◄── tools: camera, wardrobe, weather,
                                  language + vision        scores, timers, screen, memory
                                        │
-              mirror UI ◄── live cards ┤
-              speaker   ◄── Piper ◄────┘
+              mirror UI ◄── live cards ┤   written form: "7:30 PM", "58°"
+              speaker   ◄── Kokoro / Piper ◄── spoken form: "seven thirty p.m.", "58 degrees"
 ```
 
 - **Voice activity detection** cuts the microphone stream into sentences locally, so the speech
   recogniser only runs when someone is talking. It adapts to room noise and ignores fans and hums.
-- **Fast intents** handle the most common requests (scores, timers, weather, outfits, camera,
-  screen control, memory, "put … on the mirror") directly or with a single structured model call.
-  Small local models sometimes pick the wrong tool or claim they did something they didn't, so the
-  important paths don't depend on free tool choice. Everything else goes to the LLM, which can
-  call the same tools.
-- **Live cards** (scores, timers, outfits, info panels) are managed on the server and refresh on
-  their own. A live game updates every 20 seconds, and the score animates when someone scores.
+- **Early end-pointing.** At the first short pause (300 ms), IRIS starts transcribing. If the
+  transcript is clearly complete ("Iris." on its own, or a finished question), it answers without
+  waiting out the full end-of-sentence silence. If you keep talking, the guess is dropped.
+- **Echo suppression.** Anything heard while IRIS is speaking needs the wake word ("Iris, stop"),
+  and transcripts that repeat what it just said are dropped. So it never answers its own reply,
+  even through a laptop's speakers.
+- **Fast intents** handle the most common requests directly or with a single structured model call:
+  time, weather, scores, timers, outfits, camera, screen control, memory and "put … on the mirror".
+  Small local models sometimes guess wrong, or claim they did something they didn't, so the
+  important paths don't depend on them. Everything else goes to the LLM, which can call the same tools.
+- **Live cards** (scoreboards, timers, outfits, info panels) are managed on the server and refresh on
+  their own. Live games update every 20–30 seconds, and a score animates when someone scores.
+
+### Why it sounds like a person
+
+Small text-to-speech voices read text literally:
+
+| Written | Old reading | Now |
+|---|---|---|
+| "7:00 PM" | "seven zero zero P D M" | "seven p.m." |
+| "6:46" | "six hundred forty-six" | "six forty-six" |
+| "67'" | (nothing) | "67th minute" |
+
+IRIS fixes this in two layers:
+
+1. **Replies are written the way a person talks.**
+   - Weather: "It's 15° and sunny right now, but it feels more like 11°. Down to 7° tonight." Not a
+     list of numbers.
+   - Sports: "The Knicks lead the 76ers 98-91 with 2:31 left in the 4th quarter."
+   - Times: "Tonight at 7", "tomorrow at 1 PM", "in 25 minutes", "an hour and a half".
+   - Common phrasings vary a little, so it doesn't repeat the same sentence every time.
+2. **A speech normalizer** rewrites each sentence just before it's spoken. It handles times, game
+   clocks, soccer minutes, dates, °, %, mph, km/h, "vs" and ranges. The mirror still shows the
+   tidy written form.
+
+   Every rule was checked by speaking with the voice and transcribing the result back with Whisper.
+
+On a Mac, the voice is **Kokoro-82M**, which sounds far closer to a person than Piper. Piper stays as
+the instant fallback, so a sleeping Mac never leaves the mirror mute.
 
 ### Built for speed on a Raspberry Pi
 
-A Pi has no GPU, so every token the language model reads or writes costs time. Jarvis is designed
+A Pi has no GPU, so every token the language model reads or writes costs time. IRIS is designed
 around that, and each choice below was measured:
 
-- **Most requests never touch the language model.** Scores, timers, weather questions, screen
-  control, preferences and **outfit picks** are handled by fast intents and a rule-based outfit
-  planner, which answer in milliseconds.
+- **Most requests never touch the language model.** Time, weather, scores, timers, screen control,
+  preferences and **outfit picks** are handled by fast intents and a rule-based outfit planner,
+  which answer in milliseconds.
 - **Small prompts.** Each request carries only the tools its words point to ("set a timer" sends one
   tool, "tell me a joke" none), cutting a plain question's prompt from ~2,500 to ~100–200 tokens.
-- **Streaming speech.** Jarvis starts talking as soon as the first sentence is written, and the next
+- **Streaming speech.** IRIS starts talking as soon as the first sentence is written, and the next
   sentence is synthesised while the current one plays.
-- **Instant acknowledgement.** Slower requests (panels, the camera) say "Sure…" straight away.
-- **Fast defaults.** `qwen3.5:2b` (about 35% faster than 4b), whisper `tiny.en` (2.3× faster than
-  `base.en` with the same accuracy in testing), the Piper voice kept loaded as a service (10–25×
-  faster than starting it per sentence), and the model kept in memory (`keepAlive: -1`).
+- **Instant acknowledgement.** Slower requests (panels, the camera) say "On it…" straight away.
+- **Fast defaults.**
+
+  | Default | Measured |
+  |---|---|
+  | `qwen3.5:2b` | About 35% faster than 4b |
+  | Whisper `tiny.en` | 2.3× faster than `base.en`, same accuracy in testing |
+  | Piper voice kept loaded as a service | 10–25× faster than starting it per sentence |
+  | Model kept in memory (`keepAlive: -1`) | No reload from the SD card |
 
 ## Screenshots
 
@@ -101,44 +149,57 @@ noted). Full size in [`docs/features`](docs/features).
 
 | | | |
 |---|---|---|
-| ![Idle](docs/features/01-idle.png)<br>**Idle** | ![Outfit](docs/features/02-outfit.png)<br>**"What should I wear to dinner tonight?"** | ![Weather](docs/features/03-weather.png)<br>**"Will I need an umbrella tomorrow?"** |
-| ![Next game](docs/features/04-next-game.png)<br>**"When do the Lakers play?"** | ![Live score](docs/features/05-live-score-demo.png)<br>**Live score** (demo data) | ![Timer](docs/features/06-timer.png)<br>**"Set a pasta timer for 10 minutes"** |
+| ![Idle](docs/features/01-idle.png)<br>**Idle** | ![Outfit](docs/features/02-outfit.png)<br>**"What should I wear to dinner tonight?"** | ![Weather](docs/features/03-weather.png)<br>**"What's the weather like tonight?"** |
+| ![Games on now](docs/features/14-games-on-now.png)<br>**"What games are on right now?"** (live) | ![Next game](docs/features/04-next-game.png)<br>**"When do the Lakers play?"** | ![Live score](docs/features/05-live-score-demo.png)<br>**One live game** (demo data) |
+| ![Time zones](docs/features/12-time-zones.png)<br>**"What time is it in Tokyo?"** | ![Countdown](docs/features/13-countdown.png)<br>**"How long until Christmas?"** | ![Timer](docs/features/06-timer.png)<br>**"Set a pasta timer for 10 minutes"** |
 | ![Panel](docs/features/07-info-panel.png)<br>**"Put a packing list for the beach on the mirror"** | ![Focus](docs/features/08-focus-mode.png)<br>**"Focus mode"** | ![Scanning](docs/features/09-camera-scanning.png)<br>**"Add these clothes to my wardrobe"** |
 | ![Added](docs/features/10-wardrobe-added.png)<br>**…added, with photo crops** | ![Warning](docs/features/11-setup-warning-example.png)<br>**Setup problem shown on the mirror** (example) | |
 
 ## Hardware
 
-| Setup | Model | Notes |
-|---|---|---|
-| **Apple Silicon Mac** (M1 or newer) driving the mirror | `qwen3.5:4b` | Fastest: the model runs on the Mac's GPU. A Mac with a broken built-in screen is ideal. See [Running on a Mac](#running-on-a-mac-fastest) |
-| **Raspberry Pi + a Mac on your network** | `qwen3.5:4b` on the Mac | The Pi drives the mirror; the Mac does the thinking, with the Pi as automatic fallback |
-| Raspberry Pi 5, 8 GB | `qwen3.5:2b` | Everything on the Pi. Use active cooling: the LLM keeps all cores busy while it thinks |
-| Raspberry Pi 5, 4 GB | `qwen3.5:2b` | Fits comfortably (~2.7 GB for the model) |
-| Raspberry Pi 4, 8 GB | `qwen3.5:2b` | Usable, but noticeably slower for open questions |
+| Setup | Model | Voice | Notes |
+|---|---|---|---|
+| **Apple Silicon Mac** (M1 or newer) driving the mirror | `qwen3.5:4b` | Kokoro | Fastest, and the most natural voice: the model runs on the Mac's GPU. A Mac with a broken built-in screen is ideal. See [Running on a Mac](#running-on-a-mac-fastest-best-voice) |
+| **Raspberry Pi + a Mac on your network** | `qwen3.5:4b` on the Mac | Kokoro on the Mac, Piper on the Pi | The Pi drives the mirror; the Mac does the thinking and talking, with the Pi as automatic fallback |
+| Raspberry Pi 5, 8 GB | `qwen3.5:2b` | Piper | Everything on the Pi. Use active cooling: the LLM keeps all cores busy while it thinks |
+| Raspberry Pi 5, 4 GB | `qwen3.5:2b` | Piper | Fits comfortably (~2.7 GB for the model) |
+| Raspberry Pi 4, 8 GB | `qwen3.5:2b` | Piper | Usable, but noticeably slower for open questions |
 
 `qwen3.5:4b` gives somewhat better answers but generated about 35% slower in testing. `qwen3.5:2b`
 is also the smallest recommended: `qwen3.5:0.8b` sometimes claimed to have done things (like saving
-a preference) without actually calling the tool.
+a preference) without actually calling the tool. Kokoro needs about 0.5 s of computing per second
+of speech on a 4-core x86 CPU. That is several times faster on Apple Silicon, but too slow for a Pi
+to keep up, so the Pi keeps Piper.
 
-**What to expect.** Measured end to end inside MagicMirror 2.38 on a 4-core x86 test VM with
-**no GPU**, running `qwen3.5:2b`, from asking to Jarvis having **finished speaking** the answer.
-These are **not Raspberry Pi or Mac measurements**: a Pi 5 will be slower for anything that uses
-the language model, and an Apple Silicon Mac much faster (it runs the model on its GPU). Speech
-recognition adds ~0.7 s on this machine (whisper `tiny.en`).
+**What to expect.** The table below was measured inside MagicMirror 2.38 on a 4-core x86 test VM
+with **no GPU**, running `qwen3.5:2b`. Time is from the request to the answer being ready to speak.
 
-| Request | How it's answered | Time |
+| Request | How it's answered | Answer ready |
 |---|---|---|
-| "What should I wear to dinner tonight?" | rule-based planner | **0.7 s** |
-| "Will I need an umbrella tomorrow?" | from the forecast | **0.3 s** |
-| "Set a pasta timer for 10 minutes" / "focus mode" / "I hate wearing orange" | fast intent | **0.2–0.3 s** |
-| "When do the Lakers play?" | ESPN feed | **0.8 s** |
-| Open questions ("a fun fact about octopuses") | language model, streamed | first words in **~3.5–6 s** |
-| "Put a packing list for the beach on the mirror" | language model | "Sure…" at once, panel in ~12 s |
+| "What time is it in Tokyo?" / "How long until Christmas?" | clock & calendar | **< 10 ms** |
+| "What should I wear to dinner tonight?" | rule-based planner | **< 10 ms** |
+| "What's the weather like tonight?" | hourly forecast (Open-Meteo) | **0.6 s** (network) |
+| "What games are on right now?" | 10 ESPN scoreboards in parallel | **1.0 s** |
+| "When do the Lakers play?" | ESPN feed | **0.9 s** |
+| "Set a pasta timer for 10 minutes" / "focus mode" | fast intent | **< 10 ms** |
+| Open questions ("what's the capital of Australia?") | language model, streamed | first words in **~3.5–6 s** |
+| "Put a packing list for the beach on the mirror" | language model | "On it" at once, panel in ~12 s |
 | "Add these clothes to my wardrobe" | vision model | acknowledgement at once, ~50–100 s |
 
-Everything above the line between instant and model-based stays instant on any hardware. To
-make the model-based rows fast, run the model on an Apple Silicon Mac
-([below](#running-on-a-mac-fastest)): it's the single biggest speed-up.
+These are **not Raspberry Pi or Mac measurements**. A Pi 5 will be slower for anything that uses the
+language model; an Apple Silicon Mac will be much faster.
+
+**Wake word and speech recognition.** Real speech was streamed in real time through the voice
+detector and Whisper on the same VM. The time is from the end of speech to IRIS reacting:
+
+| Whisper model | Without early end-pointing | With it (default) |
+|---|---|---|
+| `tiny.en` | 1.16 s | **0.68 s** |
+| `base.en` | 1.71 s | **1.31 s** |
+
+The rows that don't need the language model stay instant on any hardware. To make the others fast,
+run the model on an Apple Silicon Mac ([below](#running-on-a-mac-fastest-best-voice)). It's the
+single biggest speed-up.
 
 You'll also need:
 
@@ -157,12 +218,12 @@ cd ~/MagicMirror/modules
 git clone https://github.com/RedNetty/MMM-AI-Jarvis.git
 ```
 
-Jarvis has **no npm dependencies**, so there's no `npm install` step.
+There are **no npm dependencies**, so there's no `npm install` step.
 
 ### 2. Install the local AI stack
 
-The setup script installs and configures everything (Ollama with a model sized to your RAM,
-whisper.cpp and Piper as background services, plus the audio and camera tools):
+The setup script installs and configures everything: Ollama with a model sized to your RAM,
+whisper.cpp and Piper as background services, and the audio and camera tools.
 
 ```bash
 cd ~/MagicMirror/modules/MMM-AI-Jarvis
@@ -173,11 +234,12 @@ It takes a while on first run (it compiles whisper.cpp and downloads a few GB of
 it plays a test phrase and prints the config block to paste. Options:
 
 ```bash
-scripts/setup-pi.sh --model qwen3.5:4b        # smarter, slower model
-scripts/setup-pi.sh --voice en_US-lessac-medium  # pick a different voice (listen at https://rhasspy.github.io/piper-samples/)
-scripts/setup-pi.sh --whisper-model base.en   # more robust speech recognition in noisy rooms (slower)
-scripts/setup-pi.sh --whisper-model tiny      # languages other than English (tiny.en is English-only)
-scripts/setup-pi.sh --no-ollama               # if the model runs on another computer
+scripts/setup-pi.sh --model qwen3.5:4b          # smarter, slower model
+scripts/setup-pi.sh --voice en_GB-alan-medium   # a different Piper voice (listen at https://rhasspy.github.io/piper-samples/)
+scripts/setup-pi.sh --whisper-model base.en     # more robust speech recognition in noisy rooms (slower)
+scripts/setup-pi.sh --whisper-model tiny        # languages other than English (tiny.en is English-only)
+scripts/setup-pi.sh --brain macbook.local       # use a Mac on your network first (see below)
+scripts/setup-pi.sh --no-ollama                 # if the model runs on another computer
 ```
 
 <details>
@@ -192,22 +254,22 @@ curl -fsSL https://ollama.com/install.sh | sh
 ollama pull qwen3.5:2b
 
 # whisper.cpp server on port 8178 (MagicMirror already uses 8080)
-git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git ~/.local/share/jarvis/whisper.cpp
-cd ~/.local/share/jarvis/whisper.cpp
+git clone --depth 1 https://github.com/ggml-org/whisper.cpp.git ~/.local/share/iris/whisper.cpp
+cd ~/.local/share/iris/whisper.cpp
 cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j --target whisper-server
 bash models/download-ggml-model.sh tiny.en
 ./build/bin/whisper-server -m models/ggml-tiny.en.bin --host 127.0.0.1 --port 8178
 
 # Piper voice server on port 5005
-python3 -m venv ~/.local/share/jarvis/piper-venv
-~/.local/share/jarvis/piper-venv/bin/pip install "piper-tts[http]"
-mkdir -p ~/.local/share/jarvis/voices && cd ~/.local/share/jarvis/voices
-curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx
-curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json
-~/.local/share/jarvis/piper-venv/bin/python -m piper.http_server -m en_GB-alan-medium.onnx --host 127.0.0.1 --port 5005
+python3 -m venv ~/.local/share/iris/piper-venv
+~/.local/share/iris/piper-venv/bin/pip install "piper-tts[http]"
+mkdir -p ~/.local/share/iris/voices && cd ~/.local/share/iris/voices
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+curl -LO https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+~/.local/share/iris/piper-venv/bin/python -m piper.http_server -m en_US-lessac-medium.onnx --host 127.0.0.1 --port 5005
 ```
 
-The script also installs `jarvis-whisper` and `jarvis-piper` systemd services so both servers start
+The script also installs `iris-whisper` and `iris-piper` systemd services so both servers start
 at boot, and limits Ollama to one loaded model to keep RAM use predictable.
 </details>
 
@@ -222,22 +284,24 @@ In `~/MagicMirror/config/config.js`:
   config: {
     userName: "Alex",
     llm: { model: "qwen3.5:2b" },
+    weather: { latitude: 40.71, longitude: -74.01 }, // optional: hourly forecasts for "tonight", "tomorrow morning"
   },
 },
 ```
 
 That's all most people need; the defaults match the setup script. Restart MagicMirror and say
-**"Jarvis, what should I wear today?"**
+**"Iris, what should I wear today?"**
 
-If something isn't running, Jarvis shows the problem in amber on the mirror (for example
+If something isn't running, IRIS shows the problem in amber on the mirror (for example
 *"Cannot reach Ollama…"*) and keeps re-checking, so services that start after MagicMirror at boot
 are picked up automatically.
 
-## Running on a Mac (fastest)
+## Running on a Mac (fastest, best voice)
 
-An Apple Silicon Mac (M1 or newer) runs the language model, speech recognition and the voice on
-its GPU, which makes the model-based features dramatically faster than on a Pi's CPU. A MacBook with
-a **broken built-in screen** works perfectly: it never needs its own display.
+An Apple Silicon Mac (M1 or newer) runs the language model and speech recognition on its GPU. That
+makes the model-based features dramatically faster than on a Pi's CPU, and it's fast enough for the
+natural **Kokoro** voice. A MacBook with a **broken built-in screen** works perfectly: it never needs
+its own display.
 
 There are two ways to use it.
 
@@ -251,14 +315,16 @@ git clone https://github.com/RedNetty/MMM-AI-Jarvis.git modules/MMM-AI-Jarvis
 modules/MMM-AI-Jarvis/scripts/setup-mac.sh
 ```
 
-Add the config block it prints to `~/MagicMirror/config/config.js`, then start the mirror from
-`~/MagicMirror` with `./node_modules/.bin/electron js/electron.js` (MagicMirror's own
-`npm run start` adds Linux-only display flags). On macOS, Jarvis uses `ffmpeg` for the microphone and camera
-and the built-in `afplay` for sound; the setup script installs ffmpeg. The first time, macOS asks
-for **microphone and camera permission**; allow it.
+Add the config block it prints to `~/MagicMirror/config/config.js`. Then start the mirror from
+`~/MagicMirror` with `./node_modules/.bin/electron js/electron.js`. Don't use MagicMirror's own
+`npm run start`: it adds Linux-only display flags.
+
+On macOS, IRIS uses `ffmpeg` for the microphone and camera and the built-in `afplay` for sound; the
+setup script installs ffmpeg. The first time, macOS asks for **microphone and camera permission**;
+allow it.
 
 **B. The Mac is the brain for a Raspberry Pi mirror.** The Pi keeps driving the display, mic,
-speaker and camera, and sends the heavy work to the Mac over your home network.
+speaker and camera, and sends the heavy work (and the voice) to the Mac over your home network.
 
 ```bash
 # On the Mac
@@ -272,7 +338,7 @@ The Pi's config then lists the Mac first and the Pi itself as a fallback:
 
 ```js
 stt: { whisperUrl: ["http://macbook.local:8178", "http://127.0.0.1:8178"] },
-tts: { piperUrl: ["http://macbook.local:5005", "http://127.0.0.1:5005"] },
+tts: { provider: "kokoro", kokoroUrl: "http://macbook.local:5006", piperUrl: "http://127.0.0.1:5005" },
 llm: {
   servers: [
     { url: "http://macbook.local:11434", model: "qwen3.5:4b" },
@@ -281,43 +347,60 @@ llm: {
 },
 ```
 
-Jarvis checks each server in the background every 15 seconds. If the Mac is asleep or off, requests
-go straight to the Pi with no waiting for timeouts. When the Mac comes back, Jarvis loads the model
-there in the background and switches to it. This was tested in MagicMirror by stopping and starting
-a second Ollama mid-session.
+IRIS checks each server in the background every 15 seconds. If the Mac is asleep or off, requests
+go straight to the Pi with no waiting for timeouts, and the Pi's Piper voice speaks. When the Mac
+comes back, IRIS loads the model there in the background and switches back to it and to Kokoro.
+Failover was tested in MagicMirror by stopping and starting servers mid-session.
 
 **What the setup script does on the Mac:**
-- Installs Ollama, ffmpeg, cmake and Python with Homebrew; builds whisper.cpp with Metal; installs Piper.
-- Runs Ollama, whisper and Piper as **LaunchAgents**: they start when you log in and restart if
-  they stop. Logs are in `~/Library/Logs/jarvis-*.log`. Turn on automatic login (System Settings →
+- Installs Ollama, ffmpeg, espeak-ng, cmake and Python with Homebrew. Builds whisper.cpp with
+  Metal, and installs Kokoro (`kokoro-onnx`, int8 model) and Piper.
+- Runs Ollama, whisper, Kokoro and Piper as **LaunchAgents**: they start when you log in and restart
+  if they stop. Logs are in `~/Library/Logs/iris-*.log`. Turn on automatic login (System Settings →
   Users & Groups) so a reboot needs no screen.
 - Keeps the Mac awake on power, including with the lid closed (`pmset`). Use `--keep-sleep` to skip.
   To undo: `sudo pmset -a disablesleep 0`.
 - With `--share`: listens on your network and allows the services through the macOS firewall.
   These services have no password, so only use `--share` on a home network you trust.
+- Options:
+  - `--kokoro-voice` picks a different voice. Choices include `af_heart` (default), `af_bella`,
+    `am_michael`, `am_adam`, `bf_emma` and `bm_george`.
+  - `--no-kokoro` keeps Piper as the voice.
 
-Tips for a screenless Mac: control it from another computer with **Screen Sharing** (enable
-System Settings → General → Sharing → Screen Sharing, then connect to `vnc://macbook.local`) or
-SSH (Sharing → Remote Login). With the lid closed, a MacBook's own microphone and camera switch
-off, so use USB ones.
+Tips for a screenless Mac:
+- Control it from another computer with **Screen Sharing**: enable System Settings → General →
+  Sharing → Screen Sharing, then connect to `vnc://macbook.local`.
+- Or use SSH: enable Sharing → Remote Login.
+- With the lid closed, a MacBook's own microphone and camera switch off, so use USB ones.
 
 Any other computer with a GPU can be the brain too: install Ollama, set `OLLAMA_HOST=0.0.0.0`, and
-list it in `llm.servers`.
+list it in `llm.servers`. `scripts/kokoro_server.py` runs on Linux and Windows as well, for the voice.
 
 ## Things to say
 
-Start with the wake word, then ask. After an answer, you have a few seconds to follow up **without**
-the wake word ("…and something warmer?"). Say **"stop"** to interrupt.
+Start with "Iris", then ask. After an answer, you have a few seconds to follow up **without**
+the wake word ("…and something warmer?"). Say **"stop"** to interrupt. "Hey Iris" and "OK Iris" work too.
+
+**Time & dates**
+- "What time is it?" · "What's the date?" · "What time is it in London?"
+- "How long until Christmas?" · "How many days until Friday?" · "How long until 6 PM?"
+- "What day is Halloween?" · "What's the date next Tuesday?" · "How many days until my birthday?"
+  (after "remember that my birthday is March 3rd")
 
 **Style & wardrobe**
-- "Jarvis, what should I wear today?" · "…for a job interview tomorrow?" · "something warmer"
+- "Iris, what should I wear today?" · "…to dinner tonight?" · "…for a job interview tomorrow?" · "something warmer"
 - "How do I look?" · "Does this go together?" · "What am I wearing?"
 - "Add this jacket to my wardrobe" (hold it up to the mirror)
 - "Add my black leather boots to my wardrobe" (by voice, no photo)
 - "Show me my blue tops" · "Remove the grey hoodie from my wardrobe"
 - "I'm wearing that" (logs the suggested outfit so it isn't repeated tomorrow)
 
+**Weather**
+- "What's the weather like?" · "…tonight?" · "…tomorrow morning?"
+- "Do I need an umbrella?" · "Do I need a jacket?" · "Can I wear shorts tomorrow?" · "Is it windy?"
+
 **On the screen**
+- "What games are on right now?" · "Any soccer on?" · "What are the NBA scores?" · "Who's playing tonight?"
 - "What's the score of the Lakers game?" · "Did the Yankees win?" · "When do Arsenal play?"
 - "Set a pasta timer for 12 minutes" · "How much time is left?" · "Cancel the timer"
 - "Put a packing list for the beach on the mirror"
@@ -325,33 +408,33 @@ the wake word ("…and something warmer?"). Say **"stop"** to interrupt.
 
 **Memory & everything else**
 - "Remember that my office is business casual" · "Forget that I hate yellow"
-- "What's the weather tomorrow?" · "Tell me a joke" · anything you'd ask an assistant
+- "Tell me a joke" · anything you'd ask an assistant
 
 ## Building your wardrobe
 
 1. Stand in front of the mirror in good light.
-2. Hold one or a few items up to the camera and say **"Jarvis, add these to my wardrobe."**
-3. Jarvis photographs them, identifies each piece (name, category, colours, material, formality,
-   warmth and season) and shows them on screen, cropped from the photo.
+2. Hold one or a few items up to the camera and say **"Iris, add these to my wardrobe."**
+3. IRIS photographs them and identifies each piece. It records the name, category, colours,
+   material, formality, warmth and season, and shows each one on screen, cropped from the photo.
 
 Tips:
 - One to three items per photo works best, held flat against a plain background.
 - You can correct anything by voice: "Change the grey hoodie to warmth 4".
-- Shoes and accessories count too. Outfits are better when Jarvis knows your shoes.
-- Say "I'm wearing that" after a suggestion. Jarvis avoids repeating recently worn pieces.
+- Shoes and accessories count too. Outfits are better when IRIS knows your shoes.
+- Say "I'm wearing that" after a suggestion. IRIS avoids repeating recently worn pieces.
 
 Your wardrobe lives in `data/wardrobe.json` (plus photos in `data/photos/`). It's plain JSON you can
 back up or edit.
 
 ## Controlling the mirror
 
-Jarvis knows which modules are on your mirror, so you can refer to them naturally ("the news",
+IRIS knows which modules are on your mirror, so you can refer to them naturally ("the news",
 "the calendar", "the weather", "top left"). It hides and shows them through MagicMirror's own
 lock mechanism, so it never fights page-switching modules like MMM-pages. A module hidden by
 something else stays hidden.
 
 **Auto-hide:** modules listed in `display.autoHide` (by default `compliments`, which shares the lower
-third) fade out while Jarvis is talking or showing a card, and come back afterwards.
+third) fade out while IRIS is talking or showing a card, and come back afterwards.
 
 **Your own voice commands:** map any phrase to a MagicMirror notification to drive other modules:
 
@@ -374,12 +457,12 @@ fully commented copy.
 
 | Option | Default | Description |
 |---|---|---|
-| `assistantName` | `"Jarvis"` | Name used on screen and in replies |
-| `wakeWord` | `"jarvis"` | Word that starts a request |
-| `wakeWordAliases` | `["jervis","jarvus","javis"]` | Mis-hearings that also count |
+| `assistantName` | `"Iris"` | Name used on screen and in replies |
+| `wakeWord` | `"iris"` | Word that starts a request |
+| `wakeWordAliases` | `["aris","irus","iras","eyeris"]` | Mis-hearings that also count |
 | `userName` | `""` | Personalises replies |
 | `language` | `"en"` | Speech recognition language (`de`, `fr`, `es`…; needs a multilingual Whisper model) |
-| `locale` / `units` | MagicMirror's | Date format and metric/imperial |
+| `locale` / `units` | MagicMirror's | Date and time format (12/24-hour), and metric/imperial |
 | `dataDir` | `"data"` | Where wardrobe, memory and photos are stored |
 | `customCommands` | `[]` | Phrase → notification mappings (see above) |
 | `debug` | `false` | Log transcripts and timings |
@@ -398,14 +481,17 @@ fully commented copy.
 
 | Option | Default | Description |
 |---|---|---|
-| `provider` | `"piper"` | `"piper"` or `"espeak"` (robotic but needs no setup) |
+| `provider` | `"piper"` | `"kokoro"` (most natural; needs a Mac or PC, falls back to Piper) · `"piper"` · `"espeak"` (robotic, needs no setup) |
+| `kokoroUrl` | `""` | Kokoro voice server (`scripts/kokoro_server.py`, installed by `setup-mac.sh`), or a list |
+| `kokoroVoice` / `kokoroSpeed` | `"af_heart"` / `null` | Kokoro voice and speed (`1.1` is a little faster) |
 | `piperUrl` | `"http://127.0.0.1:5005"` | Piper voice server (keeps the voice loaded, ~0.2 s per sentence), or a list for failover |
 | `piperCommand` / `piperModel` | setup-script paths | Piper CLI fallback, used automatically if the server is down |
 | `piperSpeaker` | `null` | Speaker id for multi-speaker voices |
 | `piperLengthScale` | `null` | Speaking speed (`0.9` faster, `1.1` slower) |
 | `espeakVoice` / `espeakSpeed` | `"en-us"` / `165` | espeak-ng settings |
 
-If Piper isn't reachable at all, Jarvis falls back to espeak-ng and says so on the mirror.
+With `provider: "kokoro"`, each sentence goes to Kokoro while it's reachable and to Piper otherwise.
+If no voice is reachable at all, IRIS falls back to espeak-ng and says so on the mirror.
 </details>
 
 <details>
@@ -431,11 +517,12 @@ If Piper isn't reachable at all, Jarvis falls back to espeak-ng and says so on t
 |---|---|---|
 | `micDevice` | `"default"` | Pi: ALSA device (`arecord -L`), e.g. `"plughw:1,0"`. Mac: `"default"`, an index or a name (`ffmpeg -f avfoundation -list_devices true -i ""`). `"none"` disables the mic |
 | `speakerDevice` | `"default"` | Pi: ALSA playback device (`aplay -L`). Mac: uses the system output (System Settings → Sound) |
-| `vadThreshold` | `500` | Minimum loudness counted as speech; raise it if noise triggers Jarvis |
+| `vadThreshold` | `500` | Minimum loudness counted as speech; raise it if noise triggers IRIS |
 | `noiseMultiplier` | `3` | Speech must be this many times louder than the room |
 | `silenceMs` | `750` | Pause that ends a sentence (lower is snappier but may cut off slow talkers) |
+| `pauseMs` | `300` | Start transcribing at a pause this short; a complete request is answered without waiting out `silenceMs` (`0` = off) |
 | `preRollMs` / `minUtteranceMs` / `maxUtteranceMs` | `400` / `350` / `15000` | Utterance shaping |
-| `allowBargeIn` | `true` | Listen while speaking so "stop" works; set `false` if Jarvis hears itself |
+| `allowBargeIn` | `true` | Listen while speaking so "Iris, stop" works. Its own voice is filtered out either way |
 | `chime` / `chimeVolume` | `true` / `0.25` | Tone when you say just the wake word |
 </details>
 
@@ -458,14 +545,15 @@ If Piper isn't reachable at all, Jarvis falls back to espeak-ng and says so on t
 
 | Option | Default | Description |
 |---|---|---|
-| `weather.latitude` / `longitude` | `null` | Set to fetch from Open-Meteo (free, no key). Leave `null` to reuse MagicMirror's weather module |
+| `weather.latitude` / `longitude` | `null` | Set to fetch from Open-Meteo (free, no key), with hourly data for "tonight" and "tomorrow morning". Leave `null` to reuse MagicMirror's weather module |
 | `weather.locationName` | `""` | Shown in answers when using coordinates |
 | `sports.enabled` | `true` | Live scores from ESPN's public feed (no key) |
-| `sports.leagues` | NFL, NBA, MLB, NHL, EPL, MLS, UCL, LaLiga, Bundesliga, Serie A | Searched when you don't name a league. Also available: `ncaaf`, `wnba`, `ncaab`, `championship`, `ligue1`, `uel` |
+| `sports.leagues` | NFL, NBA, MLB, NHL, EPL, MLS, UCL, LaLiga, Bundesliga, Serie A | Searched for "what games are on" and when you don't name a league. Also available: `ncaaf`, `wnba`, `ncaab`, `championship`, `ligue1`, `uel` |
 | `search.searxngUrl` | `""` | Optional self-hosted [SearXNG](https://docs.searxng.org) for web answers (enable the `json` format in its settings) |
 
-Outfit suggestions need weather data. Easiest is MagicMirror's built-in `weather` module (any
-provider; `openmeteo` needs no key), which Jarvis listens to automatically.
+Outfit suggestions and weather answers need weather data. Easiest is MagicMirror's built-in
+`weather` module (any provider; `openmeteo` needs no key), which IRIS listens to automatically. Its
+hourly forecast (`type: "hourly"`) is used for "tonight" questions too.
 </details>
 
 <details>
@@ -477,33 +565,36 @@ provider; `openmeteo` needs no key), which Jarvis listens to automatically.
 | `conversation.followUpWindow` | `8000` | Reply without the wake word for this long after an answer (`0` = off) |
 | `conversation.historyTurns` | `6` | Exchanges remembered within a conversation |
 | `conversation.resetAfter` | `300000` | Start fresh after this long idle |
-| `display.showTranscription` / `showResponse` | `true` | Show what you said / what Jarvis said |
+| `display.showTranscription` / `showResponse` | `true` | Show what you said / what IRIS said |
 | `display.clearAfter` | `30000` | Fade the conversation after this long idle |
 | `display.maxWidgets` | `4` | Cards on screen at once (running timers are never dropped) |
 | `display.cardTimeout` / `infoTimeout` / `snapshotTimeout` | `90000` / `180000` / `8000` | Card lifetimes |
-| `display.autoHide` | `["compliments"]` | Modules faded out while Jarvis is active |
+| `display.autoHide` | `["compliments"]` | Modules faded out while IRIS is active |
 | `display.showProblems` | `true` | Show setup problems on the mirror |
 </details>
 
 ## Notifications API
 
-Other modules (or MMM-Remote-Control) can drive Jarvis:
+Other modules (or MMM-Remote-Control) can drive IRIS:
 
 | Send | Payload | Effect |
 |---|---|---|
-| `JARVIS_ASK` | `"text"` or `{ text }` | Ask a question as if spoken (no wake word needed) |
-| `JARVIS_STOP` | – | Stop talking / cancel |
+| `IRIS_ASK` | `"text"` or `{ text }` | Ask a question as if spoken (no wake word needed) |
+| `IRIS_STOP` | – | Stop talking / cancel |
 
-Jarvis broadcasts:
+The old `JARVIS_ASK` and `JARVIS_STOP` are still accepted.
+
+IRIS broadcasts:
 
 | Notification | Payload |
 |---|---|
-| `JARVIS_STATE` | `{ state }`: `idle`, `listening`, `processing`, `speaking` |
-| `JARVIS_RESPONSE` | `{ text }`: every answer |
-| `JARVIS_TIMER_DONE` | `{ label }` |
+| `IRIS_STATE` | `{ state }`: `idle`, `listening`, `processing`, `speaking` |
+| `IRIS_RESPONSE` | `{ text }`: every answer |
+| `IRIS_TIMER_DONE` | `{ label }` |
 
-Example: show a daily outfit at 7:30 with [MMM-ModuleScheduler](https://github.com/ianperrin/MMM-ModuleScheduler)'s
-`notification_schedule` sending `JARVIS_ASK` with `"What should I wear today?"`.
+Example: to show a daily outfit at 7:30, use
+[MMM-ModuleScheduler](https://github.com/ianperrin/MMM-ModuleScheduler)'s `notification_schedule`
+to send `IRIS_ASK` with `"What should I wear today?"`.
 
 ## Privacy
 
@@ -512,9 +603,11 @@ Example: show a daily outfit at 7:30 with [MMM-ModuleScheduler](https://github.c
 - **The camera** is only used when you ask something that needs it. Snapshots for "how do I look"
   are kept in memory and shown briefly; only photos of clothing you add to your wardrobe are saved
   (`data/photos/`).
-- **No cloud services** are used for any of this. The only outbound requests are the optional sports
-  scores (ESPN), weather (Open-Meteo, only if you set coordinates) and web search (your own SearXNG).
-- Delete `data/` to wipe everything Jarvis knows.
+- **No cloud services** are used for any of this. The only outbound requests are optional:
+  - sports scores (ESPN)
+  - weather (Open-Meteo, only if you set coordinates)
+  - web search (your own SearXNG)
+- Delete `data/` to wipe everything IRIS knows.
 
 ## Troubleshooting
 
@@ -522,28 +615,44 @@ Example: show a daily outfit at 7:30 with [MMM-ModuleScheduler](https://github.c
 |---|---|
 | Amber "Cannot reach Ollama" | `systemctl status ollama`; check `llm.ollamaUrl` |
 | "Ollama model … is not installed" | `ollama pull <model>` |
-| "Cannot reach the whisper.cpp server" | `systemctl status jarvis-whisper` / `journalctl -u jarvis-whisper` |
-| Robotic voice | Piper isn't running (`systemctl status jarvis-piper`); Jarvis fell back to espeak-ng |
-| Jarvis never hears you | Find your mic with `arecord -l`, set `audio.micDevice: "plughw:CARD,0"`, test with `arecord -D plughw:1,0 -f S16_LE -r 16000 test.wav` |
-| Jarvis triggers on background noise | Raise `audio.vadThreshold` (e.g. 900); turn on `debug` to see what it hears |
-| Jarvis responds to its own voice | Set `audio.allowBargeIn: false`, or move the mic away from the speaker |
-| No sound | `aplay -l`, then set `audio.speakerDevice`; test with `speaker-test -t wav -c 2` |
+| "Cannot reach the whisper.cpp server" | `systemctl status iris-whisper` / `journalctl -u iris-whisper` |
+| Robotic voice | Piper isn't running (`systemctl status iris-piper`), so IRIS fell back to espeak-ng. On a Mac, see `~/Library/Logs/iris-kokoro.log` |
+| The voice changed | With `provider: "kokoro"`, Piper speaks while the Kokoro server (the Mac) is unreachable |
+| IRIS never hears you | Find your mic with `arecord -l`, set `audio.micDevice: "plughw:CARD,0"`, test with `arecord -D plughw:1,0 -f S16_LE -r 16000 test.wav` |
+| IRIS triggers on background noise | Raise `audio.vadThreshold` (e.g. 900); turn on `debug` to see what it hears |
+| IRIS cuts you off mid-sentence | Raise `audio.pauseMs` (e.g. 500) or set it to `0`, and/or raise `audio.silenceMs` |
 | Wake word misheard | Add the mis-hearing to `wakeWordAliases` (turn on `debug` to see transcripts) |
+| No sound | `aplay -l`, then set `audio.speakerDevice`; test with `speaker-test -t wav -c 2` |
 | "Camera … no capture tool found" | Pi camera: `rpicam-still --list-cameras`. USB: `sudo apt install fswebcam` |
 | Outfits ignore the weather | Add MagicMirror's `weather` module or set `weather.latitude/longitude` |
-| Slow answers | Keep `fastIntents: true` and `outfitPlanner: "fast"`, use `qwen3.5:2b`, or run the model on a Mac. Turn on `debug` to see which server answered and its prompt and generation times for every request |
+| Slow answers | Keep `fastIntents: true` and `outfitPlanner: "fast"`, use `qwen3.5:2b`, or run the model on a Mac. Turn on `debug` to see which server answered and the prompt and generation times for every request |
 | The Mac isn't used | From the Pi: `curl http://macbook.local:11434/api/version`. If that fails, check the Mac is awake, on the same network, and was set up with `--share` |
 
-## Upgrading from v2
+## Coming from "Jarvis"
 
-Version 3 replaces Google Cloud (Speech, TTS, Vertex AI) with local models. Google retired the
-`gemini-1.5` models and the Vertex AI SDK that v2 used, so v2 no longer works.
+The assistant is now **IRIS**. Updating is a `git pull`; then:
 
-1. Run `scripts/setup-pi.sh`.
-2. Remove `projectId`, `location`, `model`, `serviceAccountFile`, `ttsVoice` and `speechLanguage`
-   from your config (they're ignored, with a warning). `activationKeyword`, `showTranscription`,
-   `showResponse`, `responseTimeout` and `maxTokens` still work and are mapped to the new options.
-3. Delete `credentials.json` and the old `node_modules/`; v3 has no npm dependencies.
+1. **The wake word is "Iris".** If your `config.js` sets `wakeWord: "jarvis"` (the old sample did),
+   remove it, along with `assistantName` and `wakeWordAliases`. You can also keep it: any wake word
+   works.
+2. **Re-run the setup script** (`scripts/setup-pi.sh` or `scripts/setup-mac.sh`). It does the following:
+   - Moves `~/.local/share/jarvis` to `~/.local/share/iris`, and leaves a link so old paths still work.
+   - Renames the `jarvis-*` services and LaunchAgents to `iris-*`.
+   - Switches the default Piper voice to `en_US-lessac-medium`.
+   - On a Mac, installs the Kokoro voice.
+3. **Notifications** are now `IRIS_*`; the old `JARVIS_ASK` / `JARVIS_STOP` still work.
+
+The module folder stays `MMM-AI-Jarvis`, so your `config.js` entry doesn't change otherwise.
+
+**From v2 (Google Cloud):** version 3 replaced Google Cloud (Speech, TTS, Vertex AI) with local
+models, because Google retired the `gemini-1.5` models and the Vertex AI SDK that v2 used.
+
+1. Run the setup script.
+2. Remove these options from your config: `projectId`, `location`, `model`, `serviceAccountFile`,
+   `ttsVoice` and `speechLanguage`. They're ignored, with a warning.
+3. These still work and are mapped to the new options: `activationKeyword`, `showTranscription`,
+   `showResponse`, `responseTimeout` and `maxTokens`.
+4. Delete `credentials.json` and the old `node_modules/`; there are no npm dependencies now.
 
 ## Development
 
@@ -557,25 +666,28 @@ MMM-AI-Jarvis/
 ├── MMM-AI-Jarvis.css       # Mirror-friendly styles (rem-based, follows MagicMirror's type scale)
 ├── node_helper.js          # Bridge between the mirror and the engine; serves wardrobe photos
 ├── lib/
-│   ├── Jarvis.js           # Orchestrator: mic → VAD → STT → wake word → assistant → TTS
+│   ├── Iris.js             # Orchestrator: mic → VAD → STT → wake word → assistant → TTS; echo suppression
 │   ├── Assistant.js        # Conversation, system prompt, fast intents, LLM tool loop
 │   ├── intents.js          # Deterministic routing for common requests
 │   ├── tools.js            # Tool definitions exposed to the LLM
-│   ├── Skills.js           # Everything Jarvis can do (vision, outfits, scores, timers, screen…)
+│   ├── Skills.js           # Everything IRIS can do (vision, outfits, scores, timers, screen…)
+│   ├── Clock.js            # Time & date reasoning: time zones, countdowns, holidays, birthdays
 │   ├── OutfitPlanner.js    # Instant rule-based outfit picks (weather, occasion, likes, recent wear)
+│   ├── Weather.js          # Open-Meteo / MagicMirror weather, with hourly windows
+│   ├── Sports.js           # ESPN public scoreboards, natural score sentences
 │   ├── Widgets.js          # Live cards with expiry and self-refresh
 │   ├── Screen.js           # Knows and controls other modules on the mirror
-│   ├── Sports.js           # ESPN public scoreboards
 │   ├── Ollama.js           # Local LLM client (capability-aware, multi-server)
 │   ├── ServerPool.js       # Health-checked failover between servers (Mac → Pi)
-│   ├── Wardrobe.js, Memory.js, JsonStore.js
-│   ├── Weather.js, Camera.js, WebSearch.js
+│   ├── Wardrobe.js, Memory.js, JsonStore.js, Camera.js, WebSearch.js
+│   ├── speech/             # verbalize (written → spoken form), talk (natural times), weatherTalk
 │   ├── audio/              # Microphone, voice activity detector, speech queue, speaker, WAV/chime
 │   ├── stt/                # whisper.cpp client
-│   └── tts/                # Piper (server + CLI) and espeak-ng
+│   └── tts/                # Kokoro, Piper (server + CLI), espeak-ng, and the fallback chain
 ├── docs/                   # Screenshots
 ├── scripts/setup-pi.sh     # Installs the local AI stack on a Raspberry Pi
 ├── scripts/setup-mac.sh    # Installs it on an Apple Silicon Mac (mirror computer or brain)
+├── scripts/kokoro_server.py # Kokoro voice server (same HTTP API as Piper's)
 ├── config/config.js.sample
 └── test/
 ```

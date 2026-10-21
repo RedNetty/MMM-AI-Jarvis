@@ -27,12 +27,13 @@ test("normalize and daysBetween", () => {
 });
 
 test("wake word at start, end, with filler and aliases", () => {
-  const m = createWakeWordMatcher("jarvis", ["jervis"]);
-  assert.deepEqual(m.parse("Jarvis, what's the weather?"), { heard: true, query: "what's the weather?" });
-  assert.deepEqual(m.parse("Hey Jarvis what should I wear"), { heard: true, query: "what should I wear" });
-  assert.deepEqual(m.parse("what time is it, Jarvis?"), { heard: true, query: "what time is it" });
-  assert.deepEqual(m.parse("Jervis."), { heard: true, query: "" });
-  assert.equal(m.parse("I love jarvisland").heard, false);
+  const m = createWakeWordMatcher("iris", ["aris"]);
+  assert.deepEqual(m.parse("Iris, what's the weather?"), { heard: true, query: "what's the weather?" });
+  assert.deepEqual(m.parse("Hey Iris what should I wear"), { heard: true, query: "what should I wear" });
+  assert.deepEqual(m.parse("what time is it, Iris?"), { heard: true, query: "what time is it" });
+  assert.deepEqual(m.parse("Aris."), { heard: true, query: "" });
+  assert.deepEqual(m.parse("OK, Iris, what time is it?"), { heard: true, query: "what time is it?" });
+  assert.equal(m.parse("I love irises").heard, false);
   assert.equal(m.parse("nothing here").heard, false);
 });
 

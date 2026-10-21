@@ -2,6 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+
+// Replies pick among phrasings at random; tests always get the first one.
+require("../lib/speech/talk").random = () => 0;
 const OutfitPlanner = require("../lib/OutfitPlanner");
 
 let n = 0;
@@ -39,8 +42,10 @@ test("cold rain: warm layers, boots, rain jacket and a beanie; says the real tem
   );
   assert.deepEqual(names(plan), ["Grey hoodie", "Dark jeans", "Brown leather boots", "Black rain jacket", "Red wool beanie"]);
   assert.equal(plan.title, "Cold and wet");
-  assert.match(plan.spoken, /^It's 6 degrees and wet, so I'd go with your grey hoodie/);
-  assert.match(plan.spoken, /Add your black rain jacket for the rain, plus your red wool beanie\.$/);
+  assert.equal(
+    plan.spoken,
+    "It's 6° and wet, so I'd go with your grey hoodie, dark jeans and brown leather boots. Add the black rain jacket for the rain, and the red wool beanie.",
+  );
 });
 
 test("hot sun: light clothes, shorts, sandals and sunglasses", () => {
@@ -59,7 +64,7 @@ test("occasion sets formality, including a blazer; °F is spoken in °F", () => 
   );
   assert.deepEqual(names(plan), ["White dress shirt", "Grey suit trousers", "Black oxford shoes", "Navy blazer"]);
   assert.equal(plan.title, "Office ready");
-  assert.match(plan.spoken, /^It's 62 degrees, so/);
+  assert.match(plan.spoken, /^It's 62°, so I'd go with your white dress shirt, grey suit trousers and black oxford shoes\. Add the navy blazer\.$/);
 });
 
 test("dislikes, recent wear and missing weather", () => {
@@ -72,7 +77,7 @@ test("dislikes, recent wear and missing weather", () => {
   assert.ok(!names(OutfitPlanner.plan(worn, cold, { today })).includes("Grey hoodie"), "worn yesterday is skipped");
 
   const unknown = OutfitPlanner.plan(WARDROBE, null);
-  assert.match(unknown.spoken, /^I don't have the weather, but I'd go with/);
+  assert.match(unknown.spoken, /^I don't have the weather, but I'd go with your /);
   assert.equal(OutfitPlanner.plan([], null), null);
 });
 
@@ -81,4 +86,17 @@ test("dislike extraction from remembered facts", () => {
     "orange",
     "wool",
   ]);
+});
+
+test("plans for the part of the day asked about", () => {
+  // Mild now, but the evening window drops to 6°: dress for the evening.
+  const w = {
+    units: { temp: "°C", wind: "km/h" },
+    current: { temperature: 17, feelsLike: 17, condition: "clear sky", wind: 5 },
+    day: { label: "today", high: 18, low: 6, precipChance: 0, condition: "clear sky" },
+    window: { label: "tonight", high: 11, low: 6, precipChance: 0, condition: "clear sky", wind: 5 },
+  };
+  const plan = OutfitPlanner.plan(WARDROBE, w, { request: "dinner tonight" });
+  assert.ok(plan.items.some((i) => i.category === "outerwear"), "a layer for the cold evening");
+  assert.match(plan.spoken, /^Tonight it'll be about 6° and clear, so I'd go with your /);
 });
