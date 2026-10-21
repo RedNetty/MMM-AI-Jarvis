@@ -2,7 +2,7 @@ node_modules/
 package-lock.json
 
 # Personal data: wardrobe, memory and photos
-data/
+/data/
 
 # Local config copies
 config/config.js
