@@ -114,6 +114,26 @@
       // Leagues searched when you don't name one. Available: nfl, ncaaf, nba, wnba, ncaab, mlb, nhl,
       // epl, championship, laliga, bundesliga, seriea, ligue1, mls, ucl, uel
       leagues: ["nfl", "nba", "mlb", "nhl", "epl", "mls", "ucl", "laliga", "bundesliga", "seriea"],
+      favorites: [],                             // your teams, e.g. ["Lakers", "Arsenal"]: in the briefing, plus live alerts
+    },
+
+    // ── Knowledge & data (free public sources, no keys) ─────────────────────
+    // Wikipedia facts, Google News, Yahoo Finance, ECB exchange rates, dictionary.
+    info: {
+      enabled: true,                             // false = no lookups (weather and scores still work)
+      newsFeeds: [],                             // RSS URLs for "the news" instead of Google News top stories
+      currency: null,                            // home currency, e.g. "GBP"; null = from your locale
+    },
+
+    // ── Things IRIS does on its own ──────────────────────────────────────────
+    proactive: {
+      enabled: true,
+      briefing: true,                            // morning briefing the first time someone is around
+      briefingHours: [5, 11],                    // …between these hours
+      rainAlerts: true,                          // "Heads up: rain is likely in about 40 minutes"
+      teamAlerts: true,                          // kick-off and final score for sports.favorites
+      quietHours: [22, 7],                       // alerts are shown, not spoken
+      awayAfterMinutes: 15,                      // nobody heard or seen for this long → shown, not spoken
     },
 
     // ── Web search (optional, self-hosted) ─────────────────────────────────

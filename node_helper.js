@@ -44,6 +44,9 @@ module.exports = NodeHelper.create({
       case "DISMISS_WIDGET":
         this.iris?.dismissWidget(payload);
         break;
+      case "PRESENCE":
+        this.iris?.notePresence(Boolean(payload));
+        break;
       default:
         break;
     }

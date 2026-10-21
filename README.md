@@ -4,9 +4,17 @@
 stylist for [MagicMirror²](https://magicmirror.builders/). Say *"Iris…"* and it answers out loud in a
 natural voice and puts things on the mirror:
 
-- live scores, including every game on right now
-- timers, lists, and the time anywhere in the world
-- outfits picked from **your own wardrobe** for the weather, whether that's now, tonight or tomorrow morning
+- **real data, on animated cards:** the weather anywhere with an hourly chart, stocks and crypto
+  with charts that draw themselves, the news, facts with pictures, definitions, currency, maths,
+  world clocks, countdowns, and sunrise and sunset
+- **live sports:** every game on right now, or your team's game updating live
+- **outfits** picked from **your own wardrobe** for the weather, whether that's now, tonight or tomorrow morning
+- timers and lists
+
+It also does things before you ask:
+- greets you with a **morning briefing** when you walk up
+- warns you **before it rains**
+- tells you when **your team's game** starts and how it ended
 
 It can see you through a camera, remember your clothes and your preferences, and show, hide or
 rearrange the other modules on your mirror.
@@ -15,7 +23,7 @@ rearrange the other modules on your mirror.
 voice are all local. There are no cloud accounts, no API keys and no usage bills, and your camera
 images never leave the house.
 
-<p align="center"><img src="docs/screenshot.png" width="440" alt="IRIS on a MagicMirror showing an outfit suggestion, a live Premier League score and a pasta timer"></p>
+<p align="center"><img src="docs/demo.gif" width="360" alt="IRIS answering on a MagicMirror: an animated weather card, a market chart drawing itself, news cascading in"></p>
 
 <p align="center"><a href="#screenshots">Screenshots of every feature</a> · <a href="docs/ui-gallery.png">All states and cards</a></p>
 
@@ -59,6 +67,9 @@ images never leave the house.
 | ⏱️ **Timers** | "Set a pasta timer for 10 minutes" shows a countdown and announces when it's done |
 | 🪞 **Screen control** | "Hide the news", "show the calendar", "focus mode", "clear the screen", plus your own voice commands for any module |
 | 📋 **Info panels** | Ask for a list, steps or a summary and IRIS puts it on screen |
+| 📊 **Real data, never guessed** | Facts and pictures from Wikipedia, headlines (Google News: top stories, a topic or anything you ask about), stocks, indices, crypto and commodities (Yahoo Finance), exchange rates (ECB), definitions, and exact maths, tips and unit conversions. All free, with no keys |
+| ✨ **Animated cards** | Weather with a moving icon and an hourly chart that draws itself; prices that count up next to self-drawing charts; news that cascades in; an analog world clock; countdowns; the sun travelling its arc |
+| 🔔 **Surprises you** | A morning briefing when you walk up (weather, what to wear, your teams' games, the top story), a heads-up before it rains, and kick-off and final-score alerts for your teams. During quiet hours it shows these without speaking |
 | 🧠 **Long-term memory** | "Remember that my office is business casual" is kept across restarts and used in every answer |
 | 🔒 **100% local** | whisper.cpp + Ollama + Kokoro/Piper. No cloud, no keys |
 
@@ -153,7 +164,11 @@ noted). Full size in [`docs/features`](docs/features).
 | ![Games on now](docs/features/14-games-on-now.png)<br>**"What games are on right now?"** (live) | ![Next game](docs/features/04-next-game.png)<br>**"When do the Lakers play?"** | ![Live score](docs/features/05-live-score-demo.png)<br>**One live game** (demo data) |
 | ![Time zones](docs/features/12-time-zones.png)<br>**"What time is it in Tokyo?"** | ![Countdown](docs/features/13-countdown.png)<br>**"How long until Christmas?"** | ![Timer](docs/features/06-timer.png)<br>**"Set a pasta timer for 10 minutes"** |
 | ![Panel](docs/features/07-info-panel.png)<br>**"Put a packing list for the beach on the mirror"** | ![Focus](docs/features/08-focus-mode.png)<br>**"Focus mode"** | ![Scanning](docs/features/09-camera-scanning.png)<br>**"Add these clothes to my wardrobe"** |
-| ![Added](docs/features/10-wardrobe-added.png)<br>**…added, with photo crops** | ![Warning](docs/features/11-setup-warning-example.png)<br>**Setup problem shown on the mirror** (example) | |
+| ![Added](docs/features/10-wardrobe-added.png)<br>**…added, with photo crops** | ![Warning](docs/features/11-setup-warning-example.png)<br>**Setup problem shown on the mirror** (example) | ![Briefing](docs/features/15-briefing.png)<br>**"Good morning"** (also automatic) |
+| ![Paris](docs/features/16-weather-paris.png)<br>**"What's the weather in Paris?"** | ![Markets](docs/features/17-markets.png)<br>**"How's the stock market doing?"** | ![Stock](docs/features/18-stock.png)<br>**"How is Nvidia stock doing?"** |
+| ![News](docs/features/19-news.png)<br>**"What's the news?"** | ![Knowledge](docs/features/20-knowledge.png)<br>**"Who is Taylor Swift?"** | ![Sunset](docs/features/21-sunset.png)<br>**"When is sunset?"** |
+| ![Currency](docs/features/22-currency.png)<br>**"Convert 100 dollars to euros"** | ![Maths](docs/features/23-math.png)<br>**"What's 17% of 240?"** | ![Definition](docs/features/24-definition.png)<br>**"Define serendipity"** |
+| ![Grounded](docs/features/25-grounded-fact.png)<br>**"How tall is Mount Everest?"** (model + Wikipedia) | | |
 
 ## Hardware
 
@@ -406,6 +421,17 @@ the wake word ("…and something warmer?"). Say **"stop"** to interrupt. "Hey Ir
 - "Put a packing list for the beach on the mirror"
 - "Hide the news" · "Show the calendar" · "Focus mode" · "Bring back everything" · "Close that"
 
+**Knowledge & data**
+- "Good morning" · "Brief me" · "What does my day look like?"
+- "Who is Taylor Swift?" · "Tell me about the Eiffel Tower" · "What is a black hole?"
+- "How tall is Mount Everest?" (answered by the model, with Wikipedia's facts in front of it)
+- "What's the news?" · "Tech headlines" · "What's the latest on SpaceX?"
+- "How's the stock market doing?" · "How is Apple stock?" · "Price of bitcoin this week"
+- "Convert 100 dollars to euros" · "What's the euro exchange rate?"
+- "Define serendipity" · "What does ephemeral mean?"
+- "What's 17% of 240?" · "A 20% tip on $85" · "How many cups in a liter?" · "180 cm in feet"
+- "When is sunset?" · "What time does the sun come up tomorrow?"
+
 **Memory & everything else**
 - "Remember that my office is business casual" · "Forget that I hate yellow"
 - "Tell me a joke" · anything you'd ask an assistant
@@ -549,11 +575,28 @@ If no voice is reachable at all, IRIS falls back to espeak-ng and says so on the
 | `weather.locationName` | `""` | Shown in answers when using coordinates |
 | `sports.enabled` | `true` | Live scores from ESPN's public feed (no key) |
 | `sports.leagues` | NFL, NBA, MLB, NHL, EPL, MLS, UCL, LaLiga, Bundesliga, Serie A | Searched for "what games are on" and when you don't name a league. Also available: `ncaaf`, `wnba`, `ncaab`, `championship`, `ligue1`, `uel` |
+| `sports.favorites` | `[]` | Your teams, e.g. `["Lakers", "Arsenal"]`: in the briefing, plus kick-off and final-score alerts |
+| `info.enabled` | `true` | Wikipedia, news, markets, exchange rates and definitions (free, no keys). `false` keeps IRIS fully offline apart from weather and scores |
+| `info.newsFeeds` | `[]` | RSS feeds to use for "the news" instead of Google News top stories |
+| `info.currency` | from `locale` | Home currency for conversions |
 | `search.searxngUrl` | `""` | Optional self-hosted [SearXNG](https://docs.searxng.org) for web answers (enable the `json` format in its settings) |
 
 Outfit suggestions and weather answers need weather data. Easiest is MagicMirror's built-in
 `weather` module (any provider; `openmeteo` needs no key), which IRIS listens to automatically. Its
 hourly forecast (`type: "hourly"`) is used for "tonight" questions too.
+</details>
+
+<details>
+<summary><b>proactive</b> – things IRIS does on its own</summary>
+
+| Option | Default | Description |
+|---|---|---|
+| `proactive.enabled` | `true` | Turn all of these on or off |
+| `proactive.briefing` / `briefingHours` | `true` / `[5, 11]` | A morning briefing the first time someone is around. Presence comes from someone talking near the mirror, or from a sensor module that sends `USER_PRESENCE` (MMM-PIR-Sensor, face recognition). Once a day, and never on top of a question |
+| `proactive.rainAlerts` | `true` | "Heads up: rain is likely in about 40 minutes." Needs hourly data (`weather.latitude/longitude`, or the weather module with `type: "hourly"`) |
+| `proactive.teamAlerts` | `true` | Kick-off and final score for `sports.favorites`, with the live scoreboard pinned |
+| `proactive.quietHours` | `[22, 7]` | Alerts are shown but not spoken |
+| `proactive.awayAfterMinutes` | `15` | If nobody has been heard or seen for this long, alerts are shown but not spoken |
 </details>
 
 <details>
@@ -592,6 +635,9 @@ IRIS broadcasts:
 | `IRIS_RESPONSE` | `{ text }`: every answer |
 | `IRIS_TIMER_DONE` | `{ label }` |
 
+IRIS also listens for `USER_PRESENCE` (`true` / `false`, as sent by MMM-PIR-Sensor and similar
+modules) to know when someone is at the mirror.
+
 Example: to show a daily outfit at 7:30, use
 [MMM-ModuleScheduler](https://github.com/ianperrin/MMM-ModuleScheduler)'s `notification_schedule`
 to send `IRIS_ASK` with `"What should I wear today?"`.
@@ -603,10 +649,15 @@ to send `IRIS_ASK` with `"What should I wear today?"`.
 - **The camera** is only used when you ask something that needs it. Snapshots for "how do I look"
   are kept in memory and shown briefly; only photos of clothing you add to your wardrobe are saved
   (`data/photos/`).
-- **No cloud services** are used for any of this. The only outbound requests are optional:
+- **No cloud AI services** are used for any of this. The only outbound requests fetch public data,
+  never your audio or images, and all are optional:
   - sports scores (ESPN)
-  - weather (Open-Meteo, only if you set coordinates)
+  - weather (Open-Meteo: only if you set coordinates, or ask about another city)
+  - Wikipedia, Google News RSS, Yahoo Finance, Frankfurter (ECB rates), and the Free Dictionary
+    API or Wiktionary (`info.enabled: false` turns these off)
   - web search (your own SearXNG)
+  
+  Only the topic is sent; your question's wording stays local.
 - Delete `data/` to wipe everything IRIS knows.
 
 ## Troubleshooting
@@ -663,7 +714,8 @@ npm test          # node:test suite – no MagicMirror, models or hardware neede
 ```
 MMM-AI-Jarvis/
 ├── MMM-AI-Jarvis.js        # Front-end: status orb, conversation, live cards, module control
-├── MMM-AI-Jarvis.css       # Mirror-friendly styles (rem-based, follows MagicMirror's type scale)
+├── MMM-AI-Jarvis.css       # Mirror-friendly styles and animations (rem-based, follows MagicMirror's type scale)
+├── cards.js                # Animated data cards: weather, markets, news, facts, clocks, countdowns, sun, briefing
 ├── node_helper.js          # Bridge between the mirror and the engine; serves wardrobe photos
 ├── lib/
 │   ├── Iris.js             # Orchestrator: mic → VAD → STT → wake word → assistant → TTS; echo suppression
@@ -673,7 +725,10 @@ MMM-AI-Jarvis/
 │   ├── Skills.js           # Everything IRIS can do (vision, outfits, scores, timers, screen…)
 │   ├── Clock.js            # Time & date reasoning: time zones, countdowns, holidays, birthdays
 │   ├── OutfitPlanner.js    # Instant rule-based outfit picks (weather, occasion, likes, recent wear)
-│   ├── Weather.js          # Open-Meteo / MagicMirror weather, with hourly windows
+│   ├── Weather.js          # Open-Meteo / MagicMirror weather, hourly windows, any city
+│   ├── InfoSkills.js       # Facts, news, markets, currency, definitions, maths, weather/time/sun cards, briefing
+│   ├── Proactive.js        # Morning briefing, rain alerts, team alerts, quiet hours
+│   ├── data/               # Wikipedia, Google News, Yahoo Finance, Frankfurter, dictionary, calculator
 │   ├── Sports.js           # ESPN public scoreboards, natural score sentences
 │   ├── Widgets.js          # Live cards with expiry and self-refresh
 │   ├── Screen.js           # Knows and controls other modules on the mirror

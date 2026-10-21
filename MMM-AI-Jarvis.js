@@ -88,6 +88,7 @@ Module.register("MMM-AI-Jarvis", {
     sports: {
       enabled: true,
       leagues: ["nfl", "nba", "mlb", "nhl", "epl", "mls", "ucl", "laliga", "bundesliga", "seriea"],
+      favorites: [], // your teams, e.g. ["Lakers", "Arsenal"]: briefings and live alerts
     },
 
     search: {
@@ -101,6 +102,22 @@ Module.register("MMM-AI-Jarvis", {
       followUpWindow: 8000,
       historyTurns: 6,
       resetAfter: 300000,
+    },
+
+    info: {
+      enabled: true, // facts (Wikipedia), news, markets, currency, definitions – free sources, no keys
+      newsFeeds: [], // RSS feeds for "the news" instead of Google News top stories
+      currency: null, // home currency for conversions; null = from the locale
+    },
+
+    proactive: {
+      enabled: true,
+      briefing: true, // morning briefing the first time someone is around
+      briefingHours: [5, 11],
+      rainAlerts: true, // "Heads up, rain in about 40 minutes"
+      teamAlerts: true, // kick-off and final score for sports.favorites
+      quietHours: [22, 7], // show alerts without speaking
+      awayAfterMinutes: 15, // nobody heard or seen for this long → alerts are shown, not spoken
     },
 
     display: {
@@ -178,6 +195,10 @@ Module.register("MMM-AI-Jarvis", {
 
   getStyles() {
     return [`${this.name}.css`];
+  },
+
+  getScripts() {
+    return [this.file("cards.js")];
   },
 
   getHeader() {
@@ -326,7 +347,7 @@ Module.register("MMM-AI-Jarvis", {
       if (at !== entry.el) this.widgetsEl.insertBefore(entry.el, at ?? null);
     });
 
-    const needsTicker = [...this.widgets.values()].some((e) => e.type === "timer");
+    const needsTicker = [...this.widgets.values()].some((e) => e.type === "timer" || window.IrisCards?.ticks(e.type));
     if (needsTicker && !this.ticker) this.ticker = setInterval(() => this._tick(), 250);
     if (!needsTicker && this.ticker) {
       clearInterval(this.ticker);
@@ -423,8 +444,14 @@ Module.register("MMM-AI-Jarvis", {
         break;
       }
       default:
+        // Data cards (weather, markets, news, facts, clocks…) live in cards.js.
+        if (window.IrisCards?.has(w.type)) window.IrisCards.build(w.type, entry, this._cardContext());
         break;
     }
+  },
+
+  _cardContext() {
+    return { locale: this.config.locale };
   },
 
   _updateWidget(entry, w) {
@@ -489,6 +516,11 @@ Module.register("MMM-AI-Jarvis", {
         if (entry.img.src !== d.image) entry.img.src = d.image;
         break;
       default:
+        // Re-render only when the data really changed (refreshes send the same card often).
+        if (window.IrisCards?.has(w.type) && JSON.stringify(d) !== entry.dataJson) {
+          entry.dataJson = JSON.stringify(d);
+          window.IrisCards.update(w.type, entry, d, this._cardContext());
+        }
         break;
     }
   },
@@ -552,8 +584,11 @@ Module.register("MMM-AI-Jarvis", {
   },
 
   _tick() {
+    const ctx = this._cardContext();
     for (const entry of this.widgets.values()) {
-      if (entry.type === "timer" && entry.data) this._updateTimer(entry, entry.data);
+      if (!entry.data) continue;
+      if (entry.type === "timer") this._updateTimer(entry, entry.data);
+      else if (window.IrisCards?.ticks(entry.type)) window.IrisCards.tick(entry.type, entry, entry.data, ctx);
     }
   },
 
@@ -778,6 +813,10 @@ Module.register("MMM-AI-Jarvis", {
       case "WEATHER_UPDATED":
         this._forwardWeather(payload, sender);
         break;
+      // Presence sensors (MMM-PIR-Sensor, face recognition…): someone is at the mirror.
+      case "USER_PRESENCE":
+        this.sendSocketNotification("PRESENCE", payload === true || payload?.presence === true);
+        break;
       default:
         break;
     }
@@ -796,6 +835,9 @@ Module.register("MMM-AI-Jarvis", {
 
     next.units = sender?.config?.units === "imperial" ? "imperial" : "metric";
     if (payload.locationName) next.locationName = payload.locationName;
+    if (cur?.sunrise && cur?.sunset) {
+      next.sun = { sunrise: new Date(Number(cur.sunrise)).toISOString(), sunset: new Date(Number(cur.sunset)).toISOString() };
+    }
     if (cur) {
       next.current = {
         temperature: cur.temperature ?? null,
